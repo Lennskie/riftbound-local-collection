@@ -1,0 +1,14 @@
+node_modules/
+dist/
+certs/
+.env
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+npm-debug.log*
+data/
