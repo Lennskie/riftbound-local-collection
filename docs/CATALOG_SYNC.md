@@ -34,6 +34,5 @@ This is important because the supplied `cards.json` uses `riftboundId`/`imgUrl`/
 
 The server leaves the existing catalog untouched when the remote request or transaction fails. Error details are written to `catalog_meta.last_error`.
 
-## Offline import
 
 

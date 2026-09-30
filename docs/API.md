@@ -64,9 +64,8 @@ Optional `from_zone` and `to_zone` fields can select `main` or `sideboard` indep
 
 - `GET /api/catalog/status`
 - `POST /api/catalog/sync`
-- `POST /api/catalog/import`
 
-The sync endpoint starts a server-side Rifthunt fetch. Import accepts either a raw card array or an object containing `cards`.
+The sync endpoint starts a server-side Rifthunt fetch.
 
 ### `GET /api/config`
 

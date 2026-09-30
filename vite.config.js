@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
   const apiTarget = `${https ? 'https' : 'http'}://localhost:${env.PORT || 8080}`;
 
   return {
-    plugins: [react(), VitePWA({ registerType: 'autoUpdate', manifest: { name: 'Riftbound Local Collection Manager', short_name: 'Riftbound', start_url: '/', display: 'standalone', background_color: '#0b1020', theme_color: '#0b1020', icons: [] } })],
+    plugins: [react(), VitePWA({ registerType: 'autoUpdate', manifest: { name: 'Riftbound Local Collection Manager', short_name: 'Riftbound', start_url: '/', display: 'standalone', background_color: '#0b1020', theme_color: '#0b1020', icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }] } })],
     server: { host: '0.0.0.0', port: 5173, https, proxy: { '/api': { target: apiTarget, ...(https ? { secure: false } : {}) } } },
     build: { outDir: 'dist' }
   };

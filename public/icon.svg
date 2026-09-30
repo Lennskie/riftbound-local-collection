@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Riftbound Local Collection Manager</title>
+  <desc id="desc">Dark indigo icon with a card-inspired monogram.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <rect x="68" y="94" width="376" height="324" rx="50" fill="url(#panel)" opacity="0.93"/>
+  <path d="M154 170h118c74 0 120 32 120 92 0 47-29 79-83 90l79 94h-84l-60-78h-58v78h-64V170zm64 62v72h52c42 0 64-16 64-36s-22-36-64-36h-52z" fill="#f8fafc"/>
+  <path d="M278 264l69 36-69 36-69-36z" fill="#a5b4fc" opacity="0.7"/>
+</svg>
