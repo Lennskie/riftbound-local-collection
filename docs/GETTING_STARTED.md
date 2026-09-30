@@ -108,20 +108,7 @@ npm run sync
 Or use **Dashboard → Sync now**.
 
 
-## 7. Using the supplied `cards.json`
-
-The supplied JSON is an API-response fixture. It contains a top-level `cards` array and uses fields such as `riftboundId`, `name`, `set`, `setName`, `num`, `type`, `rarity`, `tcgId`, `imgUrl`, `alt`, `sig`, and `over`.
-
-The project intentionally does **not** copy that file into the repository. If Rifthunt is unavailable, you can import a compatible raw JSON object through:
-
-```http
-POST /api/catalog/import
-Content-Type: application/json
-```
-
-The request body may be the complete object with a `cards` array or a raw array.
-
-## 8. Create storage locations
+## 7. Create storage locations
 
 Go to **Containers** and create:
 
@@ -129,20 +116,7 @@ Go to **Containers** and create:
 - `custom` for user-built decks;
 - `premade` for premade decks that have a blueprint.
 
-## 9. Add collection cards
-
-Use **Collection Intake**. Each line is a printing ID, optionally followed by a quantity:
-
-```text
-ogn-001-298 x2
-ogn-007a-298
-```
-
-Choose normal or foil before submitting.
-
-For programmatic clients, the same operation is available at `POST /api/containers/:id/inventory/bulk`.
-
-## 10. Mobile QR scanning
+## 8. Mobile QR scanning
 
 The application supports QR URLs in the form:
 
@@ -151,7 +125,7 @@ The application supports QR URLs in the form:
 ```
 
 
-## 11. Backups
+## 10. Backups
 
 Stop the server or otherwise ensure no write is occurring, then copy:
 
@@ -161,11 +135,11 @@ data/riftbound.db
 
 Do not commit it to Git. `data/` is gitignored.
 
-## 12. Troubleshooting
+## 11. Troubleshooting
 
 ### Catalog is empty
 
-Check `GET /api/catalog/status` or the dashboard. If the sync failed, inspect the returned `last_error`, then retry manually or use the offline import endpoint.
+Check `GET /api/catalog/status` or the dashboard. If the sync failed, inspect the returned `last_error`, then retry manually.
 
 ### Phone cannot reach the app
 

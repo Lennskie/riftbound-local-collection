@@ -7,12 +7,12 @@ A self-hosted React/Vite PWA with an Express + SQLite backend for tracking physi
 
 - Express + `better-sqlite3` backend with WAL mode and foreign keys.
 - React + Vite + Tailwind frontend and PWA configuration.
-- Rifthunt bulk catalog adapter with the supplied JSON shape supported as an offline import fixture.
+- Rifthunt bulk catalog adapter with support for provider field-name variants.
 - Card definition/printing separation and normal/foil inventory.
-- Container CRUD, absolute inventory updates, bulk intake, atomic transfers, premade blueprints, shortfall calculation.
-- Catalog status, background boot sync, manual sync, and offline import.
+- Container CRUD, inventory updates, atomic transfers, premade blueprints, shortfall calculation.
+- Catalog status, background boot sync, manual sync, and location-aware card search.
 - QR scanner UI with a secure-context warning for plain HTTP.
-- Documentation in `docs/`.
+- PWA manifest with an installable icon and documentation in `docs/`.
 
 ## Quick start
 

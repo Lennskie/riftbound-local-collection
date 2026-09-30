@@ -8,6 +8,10 @@ Use the dashboard to see containers, catalog status, last sync, and trigger a ma
 
 Create a bulk box, custom deck, or premade deck. Open a container to inspect inventory and generate its QR label.
 
+### Edit a container
+
+On the **Containers** page, choose **Edit** next to the container you want to update. The app supports editing the existing container fields exposed by the backend: the container name and description.
+
 ### Import a Riftatlas decklist
 
 Create a **Premade deck** container and open it. In **Import Riftatlas decklist**, paste the full Riftatlas text export, including its section headings (`Legend`, `Champion`, `MainDeck`, `Battlefields`, `Runes`, and `Sideboard`). Choose **Preview list** to check catalog matches and deck limits. When the preview is ready, choose **Replace contents and import** to load the list and lock its main-deck blueprint. The importer resolves card identities across printing variants; it will not change the container if a card name is missing or the list exceeds deck limits. Importing replaces the current inventory in that premade container.
@@ -16,9 +20,9 @@ Create a **Premade deck** container and open it. In **Import Riftatlas decklist*
 
 On the **Containers** page, choose **Delete container** below its entry. Confirm the prompt to permanently remove that container and all inventory tracked inside it. Move cards to another container first if you want to keep tracking their locations.
 
-## Collection intake
+## Search
 
-Choose a destination and finish, then paste printing IDs one per line. Quantity suffixes such as `x3` are supported.
+Use **Location Search** to look up card names or definition keys and see where matching copies are currently stored. Each result includes the holding container, quantity, finish, zone, and other inventory metadata returned by the backend. Clicking a result opens the matching box directly when the card is held in one location, or prompts you to choose a destination box when it is split across multiple storage locations.
 
 ## Transfers
 
