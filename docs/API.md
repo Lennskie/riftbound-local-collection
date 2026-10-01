@@ -5,13 +5,13 @@
 
 ### `GET /api/cards`
 
-Query: `q`, `set`, `limit`, `offset`.
+Query: `q`, `set`, `limit`, `offset`. `q` matches printing names, definition names, and `definition_key` values.
 
 Returns local active printings and available set filters.
 
 ### `GET /api/search?q=...`
 
-Searches definitions and printing names and includes inventory location rows.
+Searches definitions, printing names, and definition keys. Results include each inventory row's container, quantity, finish, and zone.
 
 ## Containers
 
@@ -55,6 +55,8 @@ Optional `from_zone` and `to_zone` fields can select `main` or `sideboard` indep
 ## Premade blueprints
 
 `POST /api/blueprints/:container_id`
+
+This is a low-level replacement endpoint for premade or custom deck containers. It requires existing `definition_key` values and positive integer quantities, but does not resolve deck-list text or enforce deck rules. For user-facing imports, use the Riftatlas preview/import endpoints, which validate card matches and deck limits before atomically replacing inventory.
 
 ```json
 {"requirements":[{"definition_key":"baron nashor","required_quantity":1}]}

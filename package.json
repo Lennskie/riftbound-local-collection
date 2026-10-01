@@ -11,6 +11,7 @@
     "start": "node server/index.js",
     "preview": "vite preview",
     "sync": "node server/scripts/sync-catalog.js",
+    "test": "node --test",
     "lint": "eslint ."
   },
   "dependencies": {

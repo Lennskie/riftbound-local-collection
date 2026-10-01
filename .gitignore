@@ -11,4 +11,3 @@ data/*
 *.db-wal
 .DS_Store
 npm-debug.log*
-data/

@@ -15,9 +15,11 @@ export function mapCard(raw){
   const setLabel=String(first(raw.set_name,raw.setName,raw.setLabel,setCode)).trim();
   const collector=Number(first(raw.collector_number,raw.collectorNum,raw.num,0));
   const printing=String(first(raw.code,raw.riftboundId,raw.printing_id,raw.id,'')).toLowerCase();
+  const typeLine=first(raw.type_line,raw.typeLine,raw.card_type,raw.type);
   return {
     printing_id:printing, definition_key, rifthunt_id:first(raw.id,raw.rifthunt_id,raw.riftboundId)||null,
     tcgplayer_id:first(raw.tcgplayer_id,raw.tcgId)||null, card_name:name, variant_label,
+    type_line:typeLine==null?null:String(typeLine).trim()||null,
     set_code:setCode, set_label:setLabel, collector_num:Number.isFinite(collector)?collector:0,
     rarity:first(raw.rarity,raw.rarety)||null, alternate_art:bool(first(raw.is_alternate_art,raw.alt))?1:0,
     overnumbered:bool(first(raw.is_overnumbered,raw.over))?1:0, signature:bool(first(raw.is_signature,raw.sig))?1:0,
@@ -57,7 +59,7 @@ export function syncCatalog(db,payload){
     const upDef=db.prepare(`INSERT INTO card_definitions(definition_key,card_name,type_line) VALUES(?,?,?) ON CONFLICT(definition_key) DO UPDATE SET card_name=excluded.card_name,type_line=COALESCE(excluded.type_line,card_definitions.type_line)`);
     const upPrint=db.prepare(`INSERT INTO card_printings(printing_id,definition_key,rifthunt_id,tcgplayer_id,card_name,variant_label,set_code,set_label,collector_num,rarity,alternate_art,overnumbered,signature,image_url,is_active,synced_at) VALUES(@printing_id,@definition_key,@rifthunt_id,@tcgplayer_id,@card_name,@variant_label,@set_code,@set_label,@collector_num,@rarity,@alternate_art,@overnumbered,@signature,@image_url,1,@synced_at) ON CONFLICT(printing_id) DO UPDATE SET definition_key=excluded.definition_key,rifthunt_id=excluded.rifthunt_id,tcgplayer_id=excluded.tcgplayer_id,card_name=excluded.card_name,variant_label=excluded.variant_label,set_code=excluded.set_code,set_label=excluded.set_label,collector_num=excluded.collector_num,rarity=excluded.rarity,alternate_art=excluded.alternate_art,overnumbered=excluded.overnumbered,signature=excluded.signature,image_url=excluded.image_url,is_active=1,synced_at=excluded.synced_at`);
     const deactivate=db.prepare(`UPDATE card_printings SET is_active=0 WHERE printing_id NOT IN (${cards.length?cards.map(()=>'?').join(','):"''"})`);
-    for(const c of cards){upDef.run(c.definition_key,c.card_name,String(rawCards.find(r=>String(first(r.name,r.card_name,r.cleanName,''))===c.card_name)?.type||''));upPrint.run({...c,synced_at:now});}
+    for(const c of cards){upDef.run(c.definition_key,c.card_name,c.type_line);upPrint.run({...c,synced_at:now});}
     if(cards.length) deactivate.run(...cards.map(c=>c.printing_id));
     db.prepare(`INSERT INTO catalog_meta(key,value) VALUES('last_sync',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(now);
     db.prepare(`INSERT INTO catalog_meta(key,value) VALUES('last_count',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(String(cards.length));
