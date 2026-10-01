@@ -125,7 +125,6 @@ function CardSearch({onAdd,disabled=false,deckType='custom'}){
   const [query,setQuery]=useState('');
   const [rows,setRows]=useState([]);
   const [quantity,setQuantity]=useState(1);
-  const [finish,setFinish]=useState('normal');
   const [zone,setZone]=useState('main');
   const [adding,setAdding]=useState('');
   const [message,setMessage]=useState('');
@@ -138,7 +137,7 @@ function CardSearch({onAdd,disabled=false,deckType='custom'}){
     setAdding(card.printing_id);setMessage('');
     const type=String(card.type_line||'').toLowerCase();
     const cardZone=type.includes('rune')||type.includes('legend')||type.includes('battlefield')?'main':zone;
-    const ok=await onAdd(card.printing_id,quantity,finish,cardZone);
+    const ok=await onAdd(card.printing_id,quantity,card.is_foil?'foil':'normal',cardZone);
     setMessage(ok?`Added ${quantity} × ${card.card_name}.`:'Could not add card.');
     setAdding('');
   };
@@ -146,7 +145,6 @@ function CardSearch({onAdd,disabled=false,deckType='custom'}){
     <input className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2" placeholder="Search card name…" value={query} onChange={e=>setQuery(e.target.value)}/>
     <div className="grid gap-3 sm:grid-cols-[140px_160px_180px]">
       <label className="text-sm text-slate-400">Quantity<input type="number" min="1" step="1" className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={quantity} onChange={e=>setQuantity(Math.max(1,Number(e.target.value)||1))}/></label>
-      <label className="text-sm text-slate-400">Finish<select className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={finish} onChange={e=>setFinish(e.target.value)}><option value="normal">Normal</option><option value="foil">Foil</option></select></label>
       {deckType!=='bulk'&&<label className="text-sm text-slate-400">Zone<select className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={zone} onChange={e=>setZone(e.target.value)}><option value="main">Main deck</option><option value="sideboard">Sideboard</option></select></label>}
     </div>
     {message&&<div className="text-sm text-slate-300" role="status">{message}</div>}
@@ -197,7 +195,6 @@ function Cards({containers}){
   const [rows,setRows]=useState([]);
   const [sets,setSets]=useState([]);
   const [container,setContainer]=useState('');
-  const [finish,setFinish]=useState('normal');
   const [zone,setZone]=useState('main');
   const [quantity,setQuantity]=useState(1);
   const [adding,setAdding]=useState('');
@@ -210,6 +207,7 @@ function Cards({containers}){
     try{
       const type=String(card.type_line||'').toLowerCase();
       const cardZone=type.includes('rune')||type.includes('legend')||type.includes('battlefield')?'main':(containers.find(c=>c.container_id===container)?.type==='bulk'?'main':zone);
+      const finish=card.is_foil?'foil':'normal';
       await api(`/api/containers/${container}/inventory/bulk`,{method:'POST',body:JSON.stringify({cards:[{printing_id:card.printing_id,quantity,finish,zone:cardZone}]})});
       setMessage(`Added ${quantity} × ${card.card_name} to ${containers.find(c=>c.container_id===container)?.name||'container'}.`);
     }catch(e){setMessage(e.message)}finally{setAdding('')}
@@ -220,7 +218,6 @@ function Cards({containers}){
     <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-800 p-3">
       <label className="min-w-52 flex-1 text-sm text-slate-400">Add to container<select className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={container} onChange={e=>setContainer(e.target.value)}><option value="">Choose a container</option>{containers.map(c=><option key={c.container_id} value={c.container_id}>{c.name} ({c.type})</option>)}</select></label>
       <label className="text-sm text-slate-400">Quantity<input type="number" min="1" step="1" className="mt-1 w-24 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={quantity} onChange={e=>setQuantity(Math.max(1,Number(e.target.value)||1))}/></label>
-      <label className="text-sm text-slate-400">Finish<select className="mt-1 w-32 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={finish} onChange={e=>setFinish(e.target.value)}><option value="normal">Normal</option><option value="foil">Foil</option></select></label>
       {containers.find(c=>c.container_id===container)?.type!=='bulk'&&<label className="text-sm text-slate-400">Zone<select className="mt-1 w-36 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={zone} onChange={e=>setZone(e.target.value)}><option value="main">Main deck</option><option value="sideboard">Sideboard</option></select></label>}
       {message&&<div className="basis-full text-sm text-slate-300" role="status">{message}</div>}
     </div>

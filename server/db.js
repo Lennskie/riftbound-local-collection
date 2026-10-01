@@ -17,7 +17,8 @@ export function openDb(filename){
       tcgplayer_id TEXT, card_name TEXT NOT NULL, variant_label TEXT, set_code TEXT NOT NULL,
       set_label TEXT, collector_num INTEGER NOT NULL, rarity TEXT,
       alternate_art INTEGER NOT NULL DEFAULT 0, overnumbered INTEGER NOT NULL DEFAULT 0,
-      signature INTEGER NOT NULL DEFAULT 0, image_url TEXT, is_active INTEGER NOT NULL DEFAULT 1,
+      signature INTEGER NOT NULL DEFAULT 0, is_foil INTEGER NOT NULL DEFAULT 0,
+      image_url TEXT, is_active INTEGER NOT NULL DEFAULT 1,
       synced_at TEXT NOT NULL, FOREIGN KEY (definition_key) REFERENCES card_definitions(definition_key)
     );
     CREATE INDEX IF NOT EXISTS idx_printings_definition ON card_printings(definition_key);
@@ -66,6 +67,10 @@ export function openDb(filename){
   const containerColumns=db.prepare('PRAGMA table_info(containers)').all();
   if(!containerColumns.some(column=>column.name==='deck_locked_at')){
     db.exec('ALTER TABLE containers ADD COLUMN deck_locked_at TEXT');
+  }
+  const printingColumns=db.prepare('PRAGMA table_info(card_printings)').all();
+  if(!printingColumns.some(column=>column.name==='is_foil')){
+    db.exec('ALTER TABLE card_printings ADD COLUMN is_foil INTEGER NOT NULL DEFAULT 0');
   }
   return db;
 }
