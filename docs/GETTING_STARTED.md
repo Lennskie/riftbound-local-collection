@@ -95,6 +95,8 @@ http://YOUR-PC-NAME:8080
 
 If the phone cannot connect, allow Node.js/port 8080 through the desktop firewall for the private/home network only.
 
+The application has no authentication. Keep it on a trusted private network and do not expose or port-forward API port 8080 to the public internet. Anyone who can reach the application can read and change its collection data.
+
 ## 6. First catalog sync
 
 The server automatically attempts a sync at boot when the catalog is empty or older than `CATALOG_MAX_AGE_HOURS`.
@@ -125,7 +127,7 @@ The application supports QR URLs in the form:
 ```
 
 
-## 10. Backups
+## 9. Backups
 
 Stop the server or otherwise ensure no write is occurring, then copy:
 
@@ -135,7 +137,7 @@ data/riftbound.db
 
 Do not commit it to Git. `data/` is gitignored.
 
-## 11. Troubleshooting
+## 10. Troubleshooting
 
 ### Catalog is empty
 

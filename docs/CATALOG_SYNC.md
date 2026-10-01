@@ -23,12 +23,13 @@ The adapter accepts the exact specification names and the names present in the s
 | Set | `set_code`, `set`, `setCode` |
 | Set name | `set_name`, `setName`, `setLabel` |
 | Collector number | `collector_number`, `collectorNum`, `num` |
+| Card classification stored as `type_line` | `type_line`, `typeLine`, `card_type`, `type` |
 | Artwork | `image_url`, `art_url`, `imgUrl`, `img` |
 | Alternate art | `is_alternate_art`, `alt` |
 | Overnumbered | `is_overnumbered`, `over` |
 | Signature | `is_signature`, `sig` |
 
-This is important because the supplied `cards.json` uses `riftboundId`/`imgUrl`/`tcgId`-style fields rather than the exact field names listed in the spec.
+The live Rifthunt bulk response uses `type` for the card classification, with values such as `Rune`, `Legend`, and `Battlefield`; it does not provide a `type_line` field. The adapter maps that canonical `type` value into the database's `card_definitions.type_line` column, while accepting the explicit aliases above. Deck rules and deck UI classification depend on this mapping. The response also uses `riftboundId`/`imgUrl`/`tcgId`-style fields for other concepts.
 
 ## Failure behavior
 
