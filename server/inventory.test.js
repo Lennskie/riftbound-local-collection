@@ -65,15 +65,44 @@ test('bulk additions preserve sideboard/foil rows and roll back a deck-limit vio
   ]);
 }));
 
-test('transfers preserve finish and zones and roll back both sides on destination limits',()=>withDatabase(db=>{
+test('transfers preserve finish and zones in both directions within one deck',()=>withDatabase(db=>{
   setInventoryQuantity(db,'bulk',{printing_id:'unit-a',finish:'foil',zone:'sideboard',quantity:2});
   transferInventory(db,{from_container_id:'bulk',to_container_id:'deck',printing_id:'unit-a',finish:'foil',quantity:1,from_zone:'sideboard',to_zone:'main'});
   assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND finish=? AND zone=?').get('bulk','foil','sideboard').current_quantity,1);
   assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND finish=? AND zone=?').get('deck','foil','main').current_quantity,1);
 
+  transferInventory(db,{from_container_id:'deck',to_container_id:'deck',printing_id:'unit-a',finish:'foil',quantity:1,from_zone:'main',to_zone:'sideboard'});
+  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND finish=? AND zone=?').get('deck','foil','main').current_quantity,0);
+  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND finish=? AND zone=?').get('deck','foil','sideboard').current_quantity,1);
+  transferInventory(db,{from_container_id:'deck',to_container_id:'deck',printing_id:'unit-a',finish:'foil',quantity:1,from_zone:'sideboard',to_zone:'main'});
+  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND finish=? AND zone=?').get('deck','foil','main').current_quantity,1);
+  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND finish=? AND zone=?').get('deck','foil','sideboard').current_quantity,0);
+
   setInventoryQuantity(db,'deck',{printing_id:'unit-a',quantity:2});
-  setInventoryQuantity(db,'bulk',{printing_id:'unit-b',quantity:2});
-  assert.throws(()=>transferInventory(db,{from_container_id:'bulk',to_container_id:'deck',printing_id:'unit-b',quantity:1}),/Deck limit exceeded/);
-  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND printing_id=?').get('bulk','unit-b').current_quantity,2);
-  assert.equal(db.prepare('SELECT COUNT(*) count FROM inventory WHERE container_id=? AND printing_id=?').get('deck','unit-b').count,0);
+  setInventoryQuantity(db,'bulk',{printing_id:'spell-a',quantity:2});
+  transferInventory(db,{from_container_id:'bulk',to_container_id:'deck',printing_id:'spell-a',quantity:1});
+  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND printing_id=?').get('bulk','spell-a').current_quantity,1);
+  assert.equal(db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND printing_id=?').get('deck','spell-a').current_quantity,1);
+}));
+
+test('main and sideboard size limits do not block deck inventory changes',()=>withDatabase(db=>{
+  const cards=[];
+  for(let index=0;index<14;index++){
+    const definitionKey=`main-${index}`;
+    const printingId=`main-printing-${index}`;
+    db.prepare('INSERT INTO card_definitions(definition_key,card_name,type_line) VALUES(?,?,?)').run(definitionKey,`Main ${index}`,'Unit');
+    db.prepare('INSERT INTO card_printings(printing_id,definition_key,card_name,set_code,collector_num,synced_at) VALUES(?,?,?,?,?,?)').run(printingId,definitionKey,`Main ${index}`,'TST',index+10,'test');
+    cards.push({printing_id:printingId,quantity:3});
+  }
+  for(let index=0;index<4;index++){
+    const definitionKey=`side-${index}`;
+    const printingId=`side-printing-${index}`;
+    db.prepare('INSERT INTO card_definitions(definition_key,card_name,type_line) VALUES(?,?,?)').run(definitionKey,`Side ${index}`,'Unit');
+    db.prepare('INSERT INTO card_printings(printing_id,definition_key,card_name,set_code,collector_num,synced_at) VALUES(?,?,?,?,?,?)').run(printingId,definitionKey,`Side ${index}`,'TST',index+30,'test');
+    cards.push({printing_id:printingId,quantity:3,zone:'sideboard'});
+  }
+  addInventoryBulk(db,'deck',cards);
+  assert.equal(db.prepare("SELECT SUM(current_quantity) quantity FROM inventory WHERE container_id=? AND zone='main'").get('deck').quantity,42);
+  assert.equal(db.prepare("SELECT SUM(current_quantity) quantity FROM inventory WHERE container_id=? AND zone='sideboard'").get('deck').quantity,12);
+  assert.equal(addInventoryBulk(db,'bulk',[{printing_id:'unit-a',quantity:50}]),1);
 }));

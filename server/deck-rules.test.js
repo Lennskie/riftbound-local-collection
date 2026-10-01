@@ -17,7 +17,7 @@ test('classifies runes, legends, and battlefields separately from the main deck'
   assert.deepEqual(result.violations,[]);
 });
 
-test('enforces copy and sideboard limits across printings and finishes',()=>{
+test('warns about oversized zones while enforcing copy limits across printings and finishes',()=>{
   const result=summarizeDeck([
     {definition_key:'unit',card_name:'Unit',type_line:'Unit',zone:'main',quantity:2,finish:'normal'},
     {definition_key:'unit',card_name:'Unit',type_line:'Unit',zone:'sideboard',quantity:2,finish:'foil'},
@@ -25,5 +25,5 @@ test('enforces copy and sideboard limits across printings and finishes',()=>{
   ]);
   assert.equal(result.summary.sideboard,13);
   assert.ok(result.violations.some(message=>message.includes('4 copies exceeds the 3-copy limit')));
-  assert.ok(result.violations.some(message=>message.includes('Sideboard has 13 cards')));
+  assert.deepEqual(result.warnings,['Sideboard has 13 cards; recommended maximum is 10.']);
 });

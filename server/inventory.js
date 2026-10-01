@@ -48,17 +48,17 @@ export function addInventoryBulk(db,containerId,cards){
 export function transferInventory(db,{from_container_id,to_container_id,printing_id,finish='normal',quantity,from_zone,to_zone,zone='main'}){
   const fromZone=from_zone||zone;
   const toZone=to_zone||zone;
-  if(!from_container_id||!to_container_id||from_container_id===to_container_id||!printing_id||
+  if(!from_container_id||!to_container_id||(from_container_id===to_container_id&&fromZone===toZone)||!printing_id||
     !Number.isInteger(quantity)||quantity<=0||!FINISHES.includes(finish)||
     !ZONES.includes(fromZone)||!ZONES.includes(toZone))throw new Error('Invalid transfer');
 
   const move=db.transaction(()=>{
-    assertDeckUpdate(db,to_container_id,[{printing_id,finish,zone:toZone,quantity,mode:'add'}]);
     const source=db.prepare('SELECT current_quantity FROM inventory WHERE container_id=? AND printing_id=? AND finish=? AND zone=?')
       .get(from_container_id,printing_id,finish,fromZone);
     if(!source||source.current_quantity<quantity)throw new Error('Not enough inventory in source container');
     db.prepare('UPDATE inventory SET current_quantity=current_quantity-? WHERE container_id=? AND printing_id=? AND finish=? AND zone=?')
       .run(quantity,from_container_id,printing_id,finish,fromZone);
+    assertDeckUpdate(db,to_container_id,[{printing_id,finish,zone:toZone,quantity,mode:'add'}]);
     db.prepare(`INSERT INTO inventory(container_id,printing_id,finish,zone,current_quantity) VALUES(?,?,?,?,?)
       ON CONFLICT(container_id,printing_id,finish,zone) DO UPDATE SET current_quantity=current_quantity+excluded.current_quantity`)
       .run(to_container_id,printing_id,finish,toZone,quantity);

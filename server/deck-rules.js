@@ -11,6 +11,7 @@ function cardType(typeLine=''){
 export function summarizeDeck(cards){
   const summary={main:0,runes:0,legends:0,battlefields:0,sideboard:0};
   const violations=[];
+  const warnings=[];
   const definitions=new Map();
   for(const card of cards){
     const quantity=Number(card.current_quantity??card.quantity??0);
@@ -32,12 +33,12 @@ export function summarizeDeck(cards){
     const cap=card.type==='legend'?LIMITS.legends:card.type==='rune'?6:LIMITS.copies;
     if(card.quantity>cap)violations.push(`${card.name}: ${card.quantity} copies exceeds the ${cap}-copy limit across printings and finishes.`);
   }
-  if(summary.main>LIMITS.main)violations.push(`Main deck has ${summary.main} cards; maximum is ${LIMITS.main}.`);
+  if(summary.main>LIMITS.main)warnings.push(`Main deck has ${summary.main} cards; recommended maximum is ${LIMITS.main}.`);
   if(summary.runes>LIMITS.runes)violations.push(`Rune pool has ${summary.runes} runes; maximum is ${LIMITS.runes}.`);
   if(summary.legends>LIMITS.legends)violations.push(`Deck has ${summary.legends} legends; maximum is ${LIMITS.legends}.`);
   if(summary.battlefields>LIMITS.battlefields)violations.push(`Deck has ${summary.battlefields} battlefields; maximum is ${LIMITS.battlefields}.`);
-  if(summary.sideboard>LIMITS.sideboard)violations.push(`Sideboard has ${summary.sideboard} cards; maximum is ${LIMITS.sideboard}.`);
-  return {summary,violations};
+  if(summary.sideboard>LIMITS.sideboard)warnings.push(`Sideboard has ${summary.sideboard} cards; recommended maximum is ${LIMITS.sideboard}.`);
+  return {summary,violations,warnings};
 }
 
 export function deckCards(db,containerId){
