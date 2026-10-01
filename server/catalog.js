@@ -23,6 +23,7 @@ export function mapCard(raw){
     set_code:setCode, set_label:setLabel, collector_num:Number.isFinite(collector)?collector:0,
     rarity:first(raw.rarity,raw.rarety)||null, alternate_art:bool(first(raw.is_alternate_art,raw.alt))?1:0,
     overnumbered:bool(first(raw.is_overnumbered,raw.over))?1:0, signature:bool(first(raw.is_signature,raw.sig))?1:0,
+    is_foil:bool(first(raw.is_foil,raw.isFoil,raw.foil))?1:0,
     image_url:first(raw.image_url,raw.art_url,raw.imgUrl,raw.img)||null
   };
 }
@@ -57,7 +58,7 @@ export function syncCatalog(db,payload){
   const now=new Date().toISOString();
   const tx=db.transaction(()=>{
     const upDef=db.prepare(`INSERT INTO card_definitions(definition_key,card_name,type_line) VALUES(?,?,?) ON CONFLICT(definition_key) DO UPDATE SET card_name=excluded.card_name,type_line=COALESCE(excluded.type_line,card_definitions.type_line)`);
-    const upPrint=db.prepare(`INSERT INTO card_printings(printing_id,definition_key,rifthunt_id,tcgplayer_id,card_name,variant_label,set_code,set_label,collector_num,rarity,alternate_art,overnumbered,signature,image_url,is_active,synced_at) VALUES(@printing_id,@definition_key,@rifthunt_id,@tcgplayer_id,@card_name,@variant_label,@set_code,@set_label,@collector_num,@rarity,@alternate_art,@overnumbered,@signature,@image_url,1,@synced_at) ON CONFLICT(printing_id) DO UPDATE SET definition_key=excluded.definition_key,rifthunt_id=excluded.rifthunt_id,tcgplayer_id=excluded.tcgplayer_id,card_name=excluded.card_name,variant_label=excluded.variant_label,set_code=excluded.set_code,set_label=excluded.set_label,collector_num=excluded.collector_num,rarity=excluded.rarity,alternate_art=excluded.alternate_art,overnumbered=excluded.overnumbered,signature=excluded.signature,image_url=excluded.image_url,is_active=1,synced_at=excluded.synced_at`);
+    const upPrint=db.prepare(`INSERT INTO card_printings(printing_id,definition_key,rifthunt_id,tcgplayer_id,card_name,variant_label,set_code,set_label,collector_num,rarity,alternate_art,overnumbered,signature,is_foil,image_url,is_active,synced_at) VALUES(@printing_id,@definition_key,@rifthunt_id,@tcgplayer_id,@card_name,@variant_label,@set_code,@set_label,@collector_num,@rarity,@alternate_art,@overnumbered,@signature,@is_foil,@image_url,1,@synced_at) ON CONFLICT(printing_id) DO UPDATE SET definition_key=excluded.definition_key,rifthunt_id=excluded.rifthunt_id,tcgplayer_id=excluded.tcgplayer_id,card_name=excluded.card_name,variant_label=excluded.variant_label,set_code=excluded.set_code,set_label=excluded.set_label,collector_num=excluded.collector_num,rarity=excluded.rarity,alternate_art=excluded.alternate_art,overnumbered=excluded.overnumbered,signature=excluded.signature,is_foil=excluded.is_foil,image_url=excluded.image_url,is_active=1,synced_at=excluded.synced_at`);
     const deactivate=db.prepare(`UPDATE card_printings SET is_active=0 WHERE printing_id NOT IN (${cards.length?cards.map(()=>'?').join(','):"''"})`);
     for(const c of cards){upDef.run(c.definition_key,c.card_name,c.type_line);upPrint.run({...c,synced_at:now});}
     if(cards.length) deactivate.run(...cards.map(c=>c.printing_id));
