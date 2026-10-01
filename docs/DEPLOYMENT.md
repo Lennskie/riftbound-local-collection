@@ -4,7 +4,7 @@
 
 1. Install Node.js 20+.
 2. Clone/copy the repository onto the always-on desktop.
-3. Run `npm install`.
+3. Run `npm ci` to install the exact versions in the committed lockfile.
 4. Copy `.env.example` to `.env`.
 5. Set `BASE_URL` to the PC's LAN/FQDN URL.
 6. Run `npm run build`.

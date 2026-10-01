@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {openDb} from './db.js';
 import {listCards} from './cards.js';
+import {replaceBlueprint} from './blueprints.js';
 import {fetchCatalog,syncCatalog} from './catalog.js';
 import {summarizeDeck} from './deck-rules.js';
 import {importRiftatlasDeck,previewRiftatlasImport} from './riftatlas.js';
@@ -37,25 +38,8 @@ app.delete('/api/containers/:id/inventory',(req,res)=>{try{if(!deleteInventoryEn
 app.post('/api/containers/:id/inventory/bulk',(req,res)=>{try{const added=addInventoryBulk(db,req.params.id,req.body?.cards);res.json({added})}catch(e){res.status(400).json({error:e.message})}});
 app.post('/api/transfer',(req,res)=>{try{transferInventory(db,req.body||{});res.json({ok:true})}catch(e){res.status(400).json({error:e.message})}});
 app.post('/api/blueprints/:container_id',(req,res)=>{
-	const rows=req.body?.requirements;
-	if(!Array.isArray(rows))return res.status(400).json({error:'requirements must be an array'});
-	const container=db.prepare('SELECT type FROM containers WHERE container_id=?').get(req.params.container_id);
-	if(!container)return res.status(404).json({error:'Container not found'});
-	if(!['premade','custom'].includes(container.type))return res.status(400).json({error:'Blueprints require a premade or custom deck container'});
-	const findDefinition=db.prepare('SELECT 1 FROM card_definitions WHERE definition_key=?');
-	for(const row of rows){
-		if(!row||typeof row.definition_key!=='string'||!row.definition_key.trim())return res.status(400).json({error:'definition_key is required'});
-		if(!Number.isInteger(row.required_quantity)||row.required_quantity<=0)return res.status(400).json({error:'required_quantity must be a positive integer'});
-		if(!findDefinition.get(row.definition_key))return res.status(400).json({error:`Unknown definition: ${row.definition_key}`});
-	}
-	try{
-		const replace=db.transaction(()=>{
-			db.prepare('DELETE FROM premade_blueprints WHERE container_id=?').run(req.params.container_id);
-			const insert=db.prepare('INSERT INTO premade_blueprints(container_id,definition_key,required_quantity) VALUES(?,?,?)');
-			for(const row of rows)insert.run(req.params.container_id,row.definition_key,row.required_quantity);
-		});
-		replace();res.json({ok:true});
-	}catch(e){res.status(400).json({error:e.message})}
+	try{res.json(replaceBlueprint(db,req.params.container_id,req.body?.requirements))}
+	catch(e){res.status(e.status||400).json({error:e.message})}
 });
 
 const dist=path.resolve('dist'); if(fs.existsSync(dist)){app.use(express.static(dist));app.get('*',(req,res)=>res.sendFile(path.join(dist,'index.html')))}
