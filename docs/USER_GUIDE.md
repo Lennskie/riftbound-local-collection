@@ -22,7 +22,7 @@ On the **Containers** page, choose **Delete container** below its entry. Confirm
 
 ## Search
 
-Use **Location Search** to look up card names or definition keys and see which containers hold matching cards. Results show the card's printing details and the names of its storage containers; they do not currently show per-entry quantity, finish, or zone. Clicking a result opens the matching box directly when the card is held in one container, or prompts you to choose a destination box when it is split across multiple containers.
+Use **Location Search** to look up card names or definition keys and see how many copies you own and which containers hold them. Results show the card's printing details and the total quantity across its inventory entries. Clicking a result opens the matching box directly when the card is held in one container, or prompts you to choose a destination box when it is split across multiple containers.
 
 ## Transfers
 
