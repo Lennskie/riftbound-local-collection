@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 import {createRoot} from 'react-dom/client';
 import './index.css';
 
+const tabs=[['dashboard','Dashboard'],['cards','Cards'],['search','Location Search'],['containers','Containers'],['scan','QR Scanner']];
+
 const api = async (path, options={}) => {
   const r = await fetch(path, {headers:{'Content-Type':'application/json', ...(options.headers||{})}, ...options});
   const data = await r.json().catch(()=>({}));
@@ -13,15 +15,18 @@ const api = async (path, options={}) => {
 function App(){
   const boxMatch=window.location.pathname.match(/^\/box\/([^/]+)\/?$/);
   if(boxMatch) return <BoxPage id={boxMatch[1]}/>;
-  const [tab,setTab]=useState('dashboard');
+  const requestedTab=new URLSearchParams(window.location.search).get('tab');
+  const [tab,setTab]=useState(tabs.some(([id])=>id===requestedTab)?requestedTab:'dashboard');
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [containers,setContainers]=useState([]);
   const [catalog,setCatalog]=useState({status:'empty'});
   const [error,setError]=useState('');
   const refresh=async()=>{try{setError(''); const [c,s]=await Promise.all([api('/api/containers'),api('/api/catalog/status')]); setContainers(c.containers);setCatalog(s);}catch(e){setError(e.message)}};
   useEffect(()=>{refresh()},[]);
-  const tabs=[['dashboard','Dashboard'],['cards','Cards'],['search','Location Search'],['containers','Containers'],['scan','QR Scanner']];
+  const selectTab=(id)=>{setTab(id);setMobileMenuOpen(false)};
+  const navigation=()=>tabs.map(([id,label])=><button key={id} onClick={()=>selectTab(id)} className={`px-3 py-2 text-sm ${tab===id?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</button>);
   return <div className="min-h-screen">
-    <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur"><div className="mx-auto max-w-7xl px-4 py-4 flex items-center gap-4"><div><div className="text-xl font-bold">Riftbound</div><div className="text-xs text-slate-400">Local Collection Manager</div></div><nav className="ml-auto flex flex-wrap gap-1">{tabs.map(([id,label])=><button key={id} onClick={()=>setTab(id)} className={`px-3 py-2 rounded-lg text-sm ${tab===id?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</button>)}</nav></div></header>
+    <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur"><div className="mx-auto max-w-7xl px-4"><div className="flex items-center gap-4 py-4"><div><div className="text-xl font-bold">Riftbound</div><div className="text-xs text-slate-400">Local Collection Manager</div></div><nav aria-label="Main navigation" className="ml-auto hidden flex-wrap gap-1 md:flex">{navigation()}</nav><button type="button" className="ml-auto flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-slate-700 text-slate-300 md:hidden" aria-label={mobileMenuOpen?'Close navigation menu':'Open navigation menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={()=>setMobileMenuOpen(open=>!open)}><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/></button></div>{mobileMenuOpen&&<nav id="mobile-navigation" aria-label="Mobile navigation" className="grid gap-1 border-t border-slate-800 py-3 md:hidden">{navigation()}</nav>}</div></header>
     {error&&<div className="mx-auto max-w-7xl px-4 pt-4"><div className="rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200">{error}</div></div>}
     <main className="mx-auto max-w-7xl p-4">{tab==='dashboard'&&<Dashboard containers={containers} catalog={catalog} refresh={refresh}/>} {tab==='cards'&&<Cards containers={containers}/>} {tab==='search'&&<LocationSearch/>} {tab==='containers'&&<Containers containers={containers} refresh={refresh}/>} {tab==='scan'&&<Scanner/>}</main>
   </div>
@@ -29,6 +34,7 @@ function App(){
 
 
 function BoxPage({id}){
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [data,setData]=useState(null);
   const [locations,setLocations]=useState([]);
   const [err,setErr]=useState('');
@@ -105,7 +111,7 @@ function BoxPage({id}){
   return <main className="mx-auto max-w-6xl p-4 flex flex-col space-y-6">
     {err&&<div role="alert" className="flex items-start justify-between gap-4 rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200"><span>{err}</span><button aria-label="Dismiss error" onClick={()=>setErr('')} className="text-red-200 hover:text-white">×</button></div>}
     {notice&&<div role="status" className="flex items-start justify-between gap-4 rounded-lg border border-emerald-900 bg-emerald-950/40 p-3 text-sm text-emerald-200"><span>{notice}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')} className="text-emerald-200 hover:text-white">×</button></div>}
-    <div className="flex flex-wrap items-center gap-3"><a className="text-indigo-300" href="/">← Home</a><div className="ml-auto flex gap-2"><button onClick={label} className="rounded-lg bg-indigo-500 px-4 py-2">Generate 2&quot; QR label</button><button onClick={()=>window.print()} className="rounded-lg bg-slate-800 px-4 py-2">Print</button></div></div>
+    <div className="flex flex-wrap items-center gap-3"><a className="text-indigo-300" href="/">← Home</a><div className="ml-auto flex gap-2"><button onClick={label} className="hidden rounded-lg bg-indigo-500 px-4 py-2 sm:inline-flex">Generate 2&quot; QR label</button><button onClick={()=>window.print()} className="hidden rounded-lg bg-slate-800 px-4 py-2 sm:inline-flex">Print</button><button type="button" className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-slate-700 text-slate-300 sm:hidden" aria-label={mobileMenuOpen?'Close navigation menu':'Open navigation menu'} aria-expanded={mobileMenuOpen} aria-controls="container-mobile-menu" onClick={()=>setMobileMenuOpen(open=>!open)}><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/></button></div>{mobileMenuOpen&&<nav id="container-mobile-menu" aria-label="Mobile navigation" className="ml-auto grid w-full gap-1 border-t border-slate-800 pt-3 sm:hidden">{tabs.map(([tabId,label])=><a key={tabId} href={`/?tab=${tabId}`} aria-current={tabId==='containers'?'page':undefined} className={`px-3 py-2 text-sm ${tabId==='containers'?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</a>)}</nav>}</div>
     <section className="glass rounded-2xl p-5"><h1 className="text-3xl font-bold">{data.container.name}</h1><p className="text-slate-400">{data.container.type} · {data.container.description||'No description'}</p></section>
     {data.container.type==='premade'&&<section className="glass order-7 rounded-xl p-4 space-y-3">
       <h2 className="mb-3 font-semibold">Import Riftatlas decklist</h2>
