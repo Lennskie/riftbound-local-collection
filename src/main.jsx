@@ -2,8 +2,10 @@ import React, {useEffect, useState} from 'react';
 import QRCode from 'qrcode';
 import {createRoot} from 'react-dom/client';
 import './index.css';
+import {NavLink, ROUTES, getRoute, navigate} from './router.js';
 
 const tabs=[['dashboard','Dashboard'],['cards','Cards'],['search','Location Search'],['containers','Containers'],['scan','QR Scanner']];
+const routeNames={dashboard:'dashboard',cards:'cards',search:'search',containers:'containers',scan:'scanner'};
 
 const api = async (path, options={}) => {
   const r = await fetch(path, {headers:{'Content-Type':'application/json', ...(options.headers||{})}, ...options});
@@ -13,25 +15,41 @@ const api = async (path, options={}) => {
 };
 
 function App(){
-  const boxMatch=window.location.pathname.match(/^\/box\/([^/]+)\/?$/);
-  if(boxMatch) return <BoxPage id={boxMatch[1]}/>;
-  const requestedTab=new URLSearchParams(window.location.search).get('tab');
-  const [tab,setTab]=useState(tabs.some(([id])=>id===requestedTab)?requestedTab:'dashboard');
+  const [route,setRoute]=useState(() => getRoute(`${window.location.pathname}${window.location.search}`));
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [containers,setContainers]=useState([]);
   const [catalog,setCatalog]=useState({status:'empty'});
   const [error,setError]=useState('');
+
+  useEffect(()=>{
+    const handlePopState=()=>setRoute(getRoute(`${window.location.pathname}${window.location.search}`));
+    window.addEventListener('popstate',handlePopState);
+    return ()=>window.removeEventListener('popstate',handlePopState);
+  },[]);
+
   const refresh=async()=>{try{setError(''); const [c,s]=await Promise.all([api('/api/containers'),api('/api/catalog/status')]); setContainers(c.containers);setCatalog(s);}catch(e){setError(e.message)}};
   useEffect(()=>{refresh()},[]);
-  const selectTab=(id)=>{setTab(id);setMobileMenuOpen(false)};
-  const navigation=()=>tabs.map(([id,label])=><button key={id} onClick={()=>selectTab(id)} className={`px-3 py-2 text-sm ${tab===id?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</button>);
+
+  const navigation=()=>tabs.map(([id,label])=>{
+    const href=ROUTES[id === 'dashboard' ? 'dashboard' : (id === 'scan' ? 'scanner' : id)];
+    const active=route.name===routeNames[id];
+    return <NavLink key={id} href={href} active={active} onClick={()=>setMobileMenuOpen(false)} className={`px-3 py-2 text-sm ${active?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</NavLink>;
+  });
+
+  if (route.name === 'box') return <BoxPage id={route.id}/>;
+  if (route.name === 'not-found') return <NotFoundPage/>;
+
   return <div className="min-h-screen">
     <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur"><div className="mx-auto max-w-7xl px-4"><div className="flex items-center gap-4 py-4"><div><div className="text-xl font-bold">Riftbound</div><div className="text-xs text-slate-400">Local Collection Manager</div></div><nav aria-label="Main navigation" className="ml-auto hidden flex-wrap gap-1 md:flex">{navigation()}</nav><button type="button" className="ml-auto flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-slate-700 text-slate-300 md:hidden" aria-label={mobileMenuOpen?'Close navigation menu':'Open navigation menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={()=>setMobileMenuOpen(open=>!open)}><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/></button></div>{mobileMenuOpen&&<nav id="mobile-navigation" aria-label="Mobile navigation" className="grid gap-1 border-t border-slate-800 py-3 md:hidden">{navigation()}</nav>}</div></header>
     {error&&<div className="mx-auto max-w-7xl px-4 pt-4"><div className="rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200">{error}</div></div>}
-    <main className="mx-auto max-w-7xl p-4">{tab==='dashboard'&&<Dashboard containers={containers} catalog={catalog} refresh={refresh}/>} {tab==='cards'&&<Cards containers={containers}/>} {tab==='search'&&<LocationSearch/>} {tab==='containers'&&<Containers containers={containers} refresh={refresh}/>} {tab==='scan'&&<Scanner/>}</main>
+    <main className="mx-auto max-w-7xl p-4">{route.name==='dashboard'&&<Dashboard containers={containers} catalog={catalog} refresh={refresh}/>} {route.name==='cards'&&<Cards containers={containers}/>} {route.name==='search'&&<LocationSearch/>} {route.name==='containers'&&<Containers containers={containers} refresh={refresh}/>} {route.name==='scanner'&&<Scanner/>}</main>
   </div>
 }
 
+
+function NotFoundPage(){
+  return <main className="mx-auto max-w-xl p-6"><div className="glass rounded-2xl p-6 text-center"><h1 className="text-3xl font-bold">404</h1><p className="mt-3 text-slate-500">Page not found.</p><NavLink href="/" className="mt-5 inline-flex rounded-lg bg-indigo-500 px-4 py-2 text-white">Return to Dashboard</NavLink></div></main>;
+}
 
 function BoxPage({id}){
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
@@ -111,8 +129,7 @@ function BoxPage({id}){
   return <main className="mx-auto max-w-6xl p-4 flex flex-col space-y-6">
     {err&&<div role="alert" className="flex items-start justify-between gap-4 rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200"><span>{err}</span><button aria-label="Dismiss error" onClick={()=>setErr('')} className="text-red-200 hover:text-white">×</button></div>}
     {notice&&<div role="status" className="flex items-start justify-between gap-4 rounded-lg border border-emerald-900 bg-emerald-950/40 p-3 text-sm text-emerald-200"><span>{notice}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')} className="text-emerald-200 hover:text-white">×</button></div>}
-    <div className="flex flex-wrap items-center gap-3"><a className="text-indigo-300" href="/">← Home</a><div className="ml-auto flex gap-2"><button onClick={label} className="hidden rounded-lg bg-indigo-500 px-4 py-2 sm:inline-flex">Generate 2&quot; QR label</button><button onClick={()=>window.print()} className="hidden rounded-lg bg-slate-800 px-4 py-2 sm:inline-flex">Print</button><button type="button" className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-slate-700 text-slate-300 sm:hidden" aria-label={mobileMenuOpen?'Close navigation menu':'Open navigation menu'} aria-expanded={mobileMenuOpen} aria-controls="container-mobile-menu" onClick={()=>setMobileMenuOpen(open=>!open)}><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/></button></div>{mobileMenuOpen&&<nav id="container-mobile-menu" aria-label="Mobile navigation" className="ml-auto grid w-full gap-1 border-t border-slate-800 pt-3 sm:hidden">{tabs.map(([tabId,label])=><a key={tabId} href={`/?tab=${tabId}`} aria-current={tabId==='containers'?'page':undefined} className={`px-3 py-2 text-sm ${tabId==='containers'?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</a>)}</nav>}</div>
-    <section className="glass rounded-2xl p-5"><h1 className="text-3xl font-bold">{data.container.name}</h1><p className="text-slate-400">{data.container.type} · {data.container.description||'No description'}</p></section>
+    <div className="flex flex-wrap items-center gap-3"><NavLink href="/" className="text-indigo-300">← Home</NavLink><div className="ml-auto flex gap-2"><button onClick={label} className="hidden rounded-lg bg-indigo-500 px-4 py-2 sm:inline-flex">Generate 2&quot; QR label</button><button onClick={()=>window.print()} className="hidden rounded-lg bg-slate-800 px-4 py-2 sm:inline-flex">Print</button><button type="button" className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-slate-700 text-slate-300 sm:hidden" aria-label={mobileMenuOpen?'Close navigation menu':'Open navigation menu'} aria-expanded={mobileMenuOpen} aria-controls="container-mobile-menu" onClick={()=>setMobileMenuOpen(open=>!open)}><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/></button></div>    {mobileMenuOpen&&<nav id="container-mobile-menu" aria-label="Mobile navigation" className="ml-auto grid w-full gap-1 border-t border-slate-800 pt-3 sm:hidden">{tabs.map(([tabId,label])=><NavLink key={tabId} href={ROUTES[tabId === 'dashboard' ? 'dashboard' : (tabId === 'scan' ? 'scanner' : tabId)]} className={`px-3 py-2 text-sm ${tabId==='containers'?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`} onClick={()=>setMobileMenuOpen(false)}>{label}</NavLink>)}</nav>}</div>    <section className="glass rounded-2xl p-5"><h1 className="text-3xl font-bold">{data.container.name}</h1><p className="text-slate-400">{data.container.type} · {data.container.description||'No description'}</p></section>
     {data.container.type==='premade'&&<section className="glass order-7 rounded-xl p-4 space-y-3">
       <h2 className="mb-3 font-semibold">Import Riftatlas decklist</h2>
       <p className="mt-1 text-sm text-slate-400">Paste the complete Riftatlas text export. Preview checks card names and limits before replacing this container and locking its main deck.</p>
@@ -188,12 +205,12 @@ function LocationSearch(){
     if(!existing){acc[key].containers.push({id:row.container_id,name:row.container_name,type:row.container_type});}
     return acc;
   },{}));
-  return <section className="max-w-5xl space-y-5"><h1 className="text-3xl font-bold">Location-aware card search</h1><p className="text-slate-400">Search by card name or definition key to find which containers currently hold matching copies.</p><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search card name or definition key…" className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-3" />{error&&<div className="rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200">{error}</div>}{query.trim().length>=2&&groups.length===0&&!error&&<div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">No owned matches found for “{query}”.</div>}{groups.length>0&&<div className="space-y-3">{groups.map(item=><button key={item.key} type="button" onClick={()=>{if(item.containers.length===1){window.location.assign(`/box/${item.containers[0].id}`);return;}setSelection({card_name:item.card_name,containers:item.containers});}} className="glass block w-full rounded-xl p-3 text-left"><div className="flex items-center gap-3"><img src={item.image_url||''} alt={item.card_name} className="h-20 w-14 rounded object-cover"/><div className="min-w-0 flex-1"><div className="font-medium">{item.card_name}</div><div className="text-xs text-slate-500">{item.set_code} #{item.collector_num} · {item.printing_id}</div></div></div><div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-300"><span className="rounded-full bg-slate-800 px-2.5 py-1">{item.owned_quantity} {item.owned_quantity===1?'copy':'copies'} owned</span><span className="rounded-full bg-slate-800 px-2.5 py-1">{item.containers.length} storage location{item.containers.length===1?'':'s'}</span>{item.containers.map(container=><span key={`${item.key}-${container.id}`} className="rounded-full bg-slate-800 px-2.5 py-1">{container.name}</span>)}</div></button>)}</div>}{selection&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5"><h2 className="text-xl font-semibold">Choose a storage box</h2><p className="mt-2 text-sm text-slate-400">{selection.card_name} is stored in multiple containers.</p><div className="mt-4 space-y-2">{selection.containers.map(container=><button key={container.id} type="button" onClick={()=>{window.location.assign(`/box/${container.id}`);}} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-left hover:border-indigo-500">{container.name} <span className="text-slate-400">({container.type})</span></button>)}</div><button type="button" onClick={()=>setSelection(null)} className="mt-4 rounded-lg bg-slate-700 px-3 py-2 text-sm">Cancel</button></div></div>}</section>;
+  return <section className="max-w-5xl space-y-5"><h1 className="text-3xl font-bold">Location-aware card search</h1><p className="text-slate-400">Search by card name or definition key to find which containers currently hold matching copies.</p><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search card name or definition key…" className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-3" />{error&&<div className="rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200">{error}</div>}{query.trim().length>=2&&groups.length===0&&!error&&<div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-400">No owned matches found for “{query}”.</div>}{groups.length>0&&<div className="space-y-3">{groups.map(item=><button key={item.key} type="button" onClick={()=>{if(item.containers.length===1){navigate(`/box/${item.containers[0].id}`);return;}setSelection({card_name:item.card_name,containers:item.containers});}} className="glass block w-full rounded-xl p-3 text-left"><div className="flex items-center gap-3"><img src={item.image_url||''} alt={item.card_name} className="h-20 w-14 rounded object-cover"/><div className="min-w-0 flex-1"><div className="font-medium">{item.card_name}</div><div className="text-xs text-slate-500">{item.set_code} #{item.collector_num} · {item.printing_id}</div></div></div><div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-300"><span className="rounded-full bg-slate-800 px-2.5 py-1">{item.owned_quantity} {item.owned_quantity===1?'copy':'copies'} owned</span><span className="rounded-full bg-slate-800 px-2.5 py-1">{item.containers.length} storage location{item.containers.length===1?'':'s'}</span>{item.containers.map(container=><span key={`${item.key}-${container.id}`} className="rounded-full bg-slate-800 px-2.5 py-1">{container.name}</span>)}</div></button>)}</div>}{selection&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5"><h2 className="text-xl font-semibold">Choose a storage box</h2><p className="mt-2 text-sm text-slate-400">{selection.card_name} is stored in multiple containers.</p><div className="mt-4 space-y-2">{selection.containers.map(container=><button key={container.id} type="button" onClick={()=>{navigate(`/box/${container.id}`);}} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-left hover:border-indigo-500">{container.name} <span className="text-slate-400">({container.type})</span></button>)}</div><button type="button" onClick={()=>setSelection(null)} className="mt-4 rounded-lg bg-slate-700 px-3 py-2 text-sm">Cancel</button></div></div>}</section>;
 }
 
 function Dashboard({containers,catalog,refresh}){const [syncing,setSyncing]=useState(false); const sync=async()=>{setSyncing(true);try{await api('/api/catalog/sync',{method:'POST'});await refresh()}finally{setSyncing(false)}}; return <div className="space-y-6"><section><h1 className="text-3xl font-bold">Collection dashboard</h1><p className="mt-1 text-slate-400">Everything stays on this machine. Catalog artwork remains remote.</p></section><div className="grid gap-4 md:grid-cols-3"><Stat title="Containers" value={containers.length}/><Stat title="Catalog" value={catalog.status}/><Stat title="Last sync" value={catalog.last_sync||'Never'}/></div><section className="glass rounded-2xl p-5"><div className="flex items-center justify-between gap-4"><div><h2 className="font-semibold">Catalog synchronization</h2><p className="text-sm text-slate-400 mt-1">Rifthunt bulk data is fetched into the local SQLite catalog.</p></div><button disabled={syncing} onClick={sync} className="rounded-lg bg-indigo-500 px-4 py-2 font-medium disabled:opacity-50">{syncing?'Syncing…':'Sync now'}</button></div></section><section><h2 className="mb-3 font-semibold">Your boxes and decks</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{containers.map(c=><ContainerCard key={c.container_id} c={c}/>)}{!containers.length&&<div className="text-sm text-slate-500">No containers yet. Create a bulk box, premade deck, or custom deck.</div>}</div></section></div>}
 function Stat({title,value}){return <div className="glass rounded-2xl p-5"><div className="text-sm text-slate-400">{title}</div><div className="mt-2 text-2xl font-bold">{value}</div></div>}
-function ContainerCard({c}){return <a href={`/box/${c.container_id}`} className="glass rounded-xl p-4 hover:border-indigo-500/50 block"><div className="flex items-center gap-3">{c.type!=='bulk'&&c.legend_image_url&&<img src={c.legend_image_url} alt={c.legend_name?`${c.legend_name}, deck legend`:'Deck legend'} title={c.legend_name||'Deck legend'} loading="lazy" className="h-24 w-16 shrink-0 rounded object-cover"/>}<div className="min-w-0"><div className="font-semibold">{c.name}</div><div className="mt-1 text-xs uppercase tracking-wide text-slate-500">{c.type}</div><div className="mt-3 text-sm text-slate-300">{c.total_cards} cards</div></div></div></a>}
+function ContainerCard({c}){return <NavLink href={`/box/${c.container_id}`} className="glass block rounded-xl p-4 hover:border-indigo-500/50"><div className="flex items-center gap-3">{c.type!=='bulk'&&c.legend_image_url&&<img src={c.legend_image_url} alt={c.legend_name?`${c.legend_name}, deck legend`:'Deck legend'} title={c.legend_name||'Deck legend'} loading="lazy" className="h-24 w-16 shrink-0 rounded object-cover"/>}<div className="min-w-0"><div className="font-semibold">{c.name}</div><div className="mt-1 text-xs uppercase tracking-wide text-slate-500">{c.type}</div><div className="mt-3 text-sm text-slate-300">{c.total_cards} cards</div></div></div></NavLink>}
 
 function Cards({containers}){
   const [q,setQ]=useState('');
@@ -264,7 +281,7 @@ function Scanner(){
         try{target=new URL(decoded,window.location.origin)}catch{setMessage('This QR code is not a valid container link.');return}
         const match=target.pathname.match(/^\/box\/([a-zA-Z0-9_-]+)\/?$/);
         if(!match){setMessage('QR recognised, but it is not a Riftbound container link.');return}
-        window.location.assign(`${window.location.origin}/box/${encodeURIComponent(match[1])}`);
+        navigate(`/box/${encodeURIComponent(match[1])}`);
       },()=>{}).catch(e=>{if(active)setMessage(`Camera unavailable: ${e.message}`)});
     });
     return()=>{active=false;scanner?.stop().catch(()=>{})};
