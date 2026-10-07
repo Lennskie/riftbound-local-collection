@@ -1,14 +1,14 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import QRCode from 'qrcode';
 import {createRoot} from 'react-dom/client';
 import './index.css';
-import {NavLink, ROUTES, getRoute, navigate} from './router.js';
+import {NavLink, ROUTES, getRoute, isValidContainerId, navigate} from './router.js';
 
 const tabs=[['dashboard','Dashboard'],['cards','Cards'],['search','Location Search'],['containers','Containers'],['scan','QR Scanner']];
 const routeNames={dashboard:'dashboard',cards:'cards',search:'search',containers:'containers',scan:'scanner'};
 
 const api = async (path, options={}) => {
-  const r = await fetch(path, {headers:{'Content-Type':'application/json', ...(options.headers||{})}, ...options});
+  const r = await fetch(path, {...options, cache:'no-store', headers:{'Content-Type':'application/json', ...(options.headers||{})}});
   const data = await r.json().catch(()=>({}));
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
@@ -36,7 +36,7 @@ function App(){
     return <NavLink key={id} href={href} active={active} onClick={()=>setMobileMenuOpen(false)} className={`px-3 py-2 text-sm ${active?'bg-indigo-500 text-white':'text-slate-300 hover:bg-slate-800'}`}>{label}</NavLink>;
   });
 
-  if (route.name === 'box') return <BoxPage id={route.id}/>;
+  if (route.name === 'box') return <BoxPage key={route.id} id={route.id}/>;
   if (route.name === 'not-found') return <NotFoundPage/>;
 
   return <div className="min-h-screen">
@@ -62,14 +62,12 @@ function BoxPage({id}){
   const [notice,setNotice]=useState('');
   const [riftatlasText,setRiftatlasText]=useState('');
   const [riftatlasPreview,setRiftatlasPreview]=useState(null);
-  const [baseUrl,setBaseUrl]=useState(window.location.origin);
-  const load=async()=>{
+  const load=useCallback(async()=>{
     try{const [next,all]=await Promise.all([api(`/api/containers/${id}`),api('/api/containers')]);setData(next);setLocations(all.containers);setErr('');return true}
     catch(e){setErr(e.message);return false}
-  };
-  useEffect(()=>{api('/api/config').then(x=>x.base_url&&setBaseUrl(x.base_url)).catch(()=>{})},[]);
-  useEffect(()=>{load()},[]);
-  const label=async()=>{if(!data)return;const url=`${baseUrl.replace(/\/$/,'')}/box/${id}`;const canvas=document.createElement('canvas');await QRCode.toCanvas(canvas,url,{width:600,margin:2});const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=`${data.container.name}-qr.png`;a.click()};
+  },[id]);
+  useEffect(()=>{setData(null);setErr('');load()},[load]);
+  const label=async()=>{if(!data)return;const payload=String(data.container.container_id);const canvas=document.createElement('canvas');await QRCode.toCanvas(canvas,payload,{width:600,margin:2});const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=`${data.container.name}-qr.png`;a.click()};
   const addCard=async(printing_id,quantity,finish,zone)=>{
     setBusy(true);
     try{
@@ -273,20 +271,43 @@ function Scanner(){
   useEffect(()=>{
     let scanner;
     let active=true;
-    import('html5-qrcode').then(({Html5Qrcode})=>{
+    let processing=false;
+    let startPromise;
+    let scannerStates;
+    import('html5-qrcode').then(({Html5Qrcode,Html5QrcodeScannerState})=>{
       if(!secure||!active)return;
+      scannerStates=Html5QrcodeScannerState;
       scanner=new Html5Qrcode('qr-reader');
-      scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},decoded=>{
-        let target;
-        try{target=new URL(decoded,window.location.origin)}catch{setMessage('This QR code is not a valid container link.');return}
-        const match=target.pathname.match(/^\/box\/([a-zA-Z0-9_-]+)\/?$/);
-        if(!match){setMessage('QR recognised, but it is not a Riftbound container link.');return}
-        navigate(`/box/${encodeURIComponent(match[1])}`);
+      startPromise=scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},async decoded=>{
+        if(processing)return;
+        const containerId=String(decoded).trim();
+        if(!isValidContainerId(containerId)){
+          setMessage('This QR code is not a valid container ID.');
+          return;
+        }
+        processing=true;
+        try{
+          await api(`/api/containers/${encodeURIComponent(containerId)}`);
+          if(!active)return;
+          if(scanner.getState()===scannerStates.SCANNING||scanner.getState()===scannerStates.PAUSED)await scanner.stop();
+          navigate(`/box/${encodeURIComponent(containerId)}`);
+        }catch(error){
+          processing=false;
+          setMessage(`Could not open container: ${error.message}`);
+        }
       },()=>{}).catch(e=>{if(active)setMessage(`Camera unavailable: ${e.message}`)});
     });
-    return()=>{active=false;scanner?.stop().catch(()=>{})};
+    return()=>{
+      active=false;
+      if(scanner){
+        void (async()=>{
+          await startPromise;
+          if(scanner.getState()===scannerStates.SCANNING||scanner.getState()===scannerStates.PAUSED)await scanner.stop();
+        })().catch(error=>console.error('Failed to stop QR scanner:',error));
+      }
+    };
   },[secure]);
-  return <section className="max-w-xl space-y-5"><h1 className="text-3xl font-bold">QR scanner</h1>{!secure?<div className="rounded-xl border border-amber-800 bg-amber-950/50 p-4 text-sm text-amber-200">Camera scanning and PWA installation require a secure browser context. Because this app intentionally supports plain HTTP on a home LAN, use your phone’s native camera to scan the sticker URL, or access the app through HTTPS when available.</div>:<div id="qr-reader" className="overflow-hidden rounded-xl bg-black min-h-64"/>}{message&&<div className="rounded-lg bg-slate-900 p-3 text-sm break-all" role="status">{message}</div>}</section>;
+  return <section className="max-w-xl space-y-5"><h1 className="text-3xl font-bold">QR scanner</h1>{!secure?<div className="rounded-xl border border-amber-800 bg-amber-950/50 p-4 text-sm text-amber-200">Camera scanning and PWA installation require a secure browser context. Because this app intentionally supports plain HTTP on a home LAN, use your phone’s native camera to scan the sticker QR code or access the app through HTTPS when available.</div>:<div id="qr-reader" className="overflow-hidden rounded-xl bg-black min-h-64"/>}{message&&<div className="rounded-lg bg-slate-900 p-3 text-sm break-all" role="status">{message}</div>}</section>;
 }
 
 createRoot(document.getElementById('root')).render(<App/>);
