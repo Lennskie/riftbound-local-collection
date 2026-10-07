@@ -15,6 +15,7 @@ import {addInventoryBulk,deleteInventoryEntry,setInventoryQuantity,transferInven
 const PORT=Number(process.env.PORT||8080), HOST=process.env.HOST||'0.0.0.0';
 const db=openDb(process.env.DATABASE_PATH||'data/riftbound.db');
 const app=express(); app.use(express.json({limit:'20mb'}));
+app.use('/api',(_req,res,next)=>{res.set('Cache-Control','no-store');next()});
 const meta=k=>db.prepare('SELECT value FROM catalog_meta WHERE key=?').get(k)?.value||null;
 const setMeta=(k,v)=>db.prepare(`INSERT INTO catalog_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(k,String(v??''));
 let syncState=meta('last_sync')?'idle':'empty'; let syncPromise=null;

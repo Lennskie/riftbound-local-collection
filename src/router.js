@@ -24,6 +24,11 @@ export function normalizeUrl(path = '/') {
   return `${pathname}${url.search}${url.hash}`;
 }
 
+export function isValidContainerId(value) {
+  const candidate = String(value ?? '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate);
+}
+
 export function getRoute(pathname) {
   const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
   const url = new URL(String(pathname || '/'), base);
