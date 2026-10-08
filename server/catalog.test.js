@@ -31,6 +31,40 @@ test('maps foil metadata and stores it on the printing',()=>withDatabase(db=>{
   assert.equal(db.prepare('SELECT is_foil FROM card_printings WHERE printing_id=?').get('ogn-007-298').is_foil,1);
 }));
 
+test('stores a variant-free definition name regardless of feed order',()=>{
+  const cards=[
+    {id:'plain',riftboundId:'tst-001',name:'X',set:'TST',num:1,type:'Unit'},
+    {id:'alt',riftboundId:'tst-002',name:'X (Alternate Art)',set:'TST',num:2,type:'Unit'}
+  ];
+  for(const orderedCards of [cards,[...cards].reverse()]){
+    withDatabase(db=>{
+      syncCatalog(db,{cards:orderedCards});
+      assert.equal(db.prepare('SELECT card_name FROM card_definitions WHERE definition_key=?').get('x').card_name,'X');
+      assert.equal(db.prepare('SELECT card_name FROM card_printings WHERE printing_id=?').get('tst-002').card_name,'X (Alternate Art)');
+    });
+  }
+});
+
+test('disambiguates duplicate printing IDs using the trailing variant label',()=>withDatabase(db=>{
+  const cards=[
+    {id:'plain-source',riftboundId:'opp-017-024',name:'Annie, Dark Child',set:'OPP',num:24,type:'Champion'},
+    {id:'metal-source',riftboundId:'opp-017-024',name:'Annie, Dark Child (Metal)',set:'OPP',num:24,type:'Champion'}
+  ];
+  syncCatalog(db,{cards});
+  assert.deepEqual(db.prepare('SELECT printing_id,card_name FROM card_printings ORDER BY printing_id').all(),[
+    {printing_id:'opp-017-024',card_name:'Annie, Dark Child'},
+    {printing_id:'opp-017-024-metal',card_name:'Annie, Dark Child (Metal)'}
+  ]);
+  assert.equal(db.prepare('SELECT card_name FROM card_definitions WHERE definition_key=?').get('annie, dark child').card_name,'Annie, Dark Child');
+}));
+
+test('only trailing parentheticals are treated as variants',()=>{
+  const token=mapCard({name:'Recruit (271) // Buff',set:'TST'});
+  assert.equal(token.definition_key,'recruit (271) // buff');
+  assert.equal(token.definition_name,'Recruit (271) // Buff');
+  assert.equal(token.variant_label,null);
+});
+
 test('sync stores definition types and deactivates removed printings',()=>withDatabase(db=>{
   assert.equal(syncCatalog(db,{cards:providerCards}),3);
   assert.deepEqual(db.prepare('SELECT definition_key,type_line FROM card_definitions ORDER BY definition_key').all(),[

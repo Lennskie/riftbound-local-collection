@@ -24,6 +24,16 @@ On the **Containers** page, choose **Delete container** below its entry. Confirm
 
 Use **Location Search** to look up card names or definition keys and see how many copies you own and which containers hold them. Results show the card's printing details and the total quantity across its inventory entries. Clicking a result opens the matching box directly when the card is held in one container, or prompts you to choose a destination box when it is split across multiple containers.
 
+## Cards page scanner
+
+On **Cards**, choose the destination container first, then tap the camera button beside the search field. The scanner checks that a container is selected and that the browser has a secure context before asking for camera permission. Phones require HTTPS with a certificate trusted by the device; see [Getting Started](GETTING_STARTED.md#enable-https-for-phone-camera-access).
+
+Hold a card steady and in focus inside the guide. Automatic capture starts after the card edges and title area are detected as sharp and steady; **Scan now** is available as a manual fallback. For portrait cards, align the name banner in the highlighted band around the middle-left of the card, below its type bar and artwork. Use **Battlefield** for landscape cards. If the scanner cannot read a title, move or remove the card before holding it in the guide again.
+
+The scanner shows its best definition match and the available printing artwork for visual verification. Swipe or use the arrows/dots to choose the exact printing; the caption includes set, collector number, rarity, variant, and printing ID. Choose **Normal** or **Foil**, the quantity, and (for deck containers) the zone. Runes, legends, battlefields, and all cards added to bulk boxes always use the main zone.
+
+Choose **ADD** to add the selected printing. Server deck-limit or network errors leave the card and its selected printing on screen so you can retry. **RETRY** returns to the live camera without adding anything; **Done** closes the scanner. The camera stays on between cards, and the selected finish, quantity, zone, and orientation remain available during the scanner session.
+
 ## Transfers
 
 On a deck container page, choose a destination and use **Move to destination** on a card row. To restore a locked deck, scan/open its QR page and use **Move N to deck** next to a matching copy found in another container. Transfers update both containers atomically and preserve the card's finish and source zone.
