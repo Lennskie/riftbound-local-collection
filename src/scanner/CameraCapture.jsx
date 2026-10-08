@@ -14,10 +14,10 @@ function grayPixels(context,canvas){
   return gray;
 }
 
-function cropTitleBand(video,stage,orientation){
+function cropTitleBand(video,stage,mode){
   const bounds=stage?.getBoundingClientRect();
   if(!video||!bounds||!video.videoWidth||!video.videoHeight) throw new Error('The camera frame is not ready yet');
-  const geometry=getGuideGeometry(bounds.width,bounds.height,orientation);
+  const geometry=getGuideGeometry(bounds.width,bounds.height,mode);
   const source=mapScreenRectToVideoRect(geometry.titleBand,bounds.width,bounds.height,video.videoWidth,video.videoHeight);
   if(!source) throw new Error('The card title band is outside the camera frame');
   const canvas=document.createElement('canvas');
@@ -31,8 +31,8 @@ function cropTitleBand(video,stage,orientation){
 
 export default function CameraCapture({
   enabled,
-  orientation,
-  onOrientationChange,
+  mode,
+  onModeChange,
   onCapture,
   onCaptureError,
   resetKey,
@@ -43,11 +43,11 @@ export default function CameraCapture({
   const callbacksRef=useRef({onCapture,onCaptureError});
   const takeCaptureRef=useRef(null);
   const loopControlRef=useRef({start:null,stop:null});
-  const orientationRef=useRef(orientation);
+  const modeRef=useRef(mode);
   const pausedRef=useRef(paused);
   const gateRef=useRef(new CaptureGate());
   const resetKeyRef=useRef(resetKey);
-  const orientationStateRef=useRef(orientation);
+  const modeStateRef=useRef(mode);
   const previousFrameRef=useRef(null);
   const captureInFlightRef=useRef(false);
   const [viewport,setViewport]=useState({width:0,height:0});
@@ -57,7 +57,7 @@ export default function CameraCapture({
   const [guideStatus,setGuideStatus]=useState('searching');
 
   callbacksRef.current={onCapture,onCaptureError};
-  orientationRef.current=orientation;
+  modeRef.current=mode;
   pausedRef.current=paused;
 
   useEffect(()=>{
@@ -69,12 +69,12 @@ export default function CameraCapture({
   },[resetKey]);
 
   useEffect(()=>{
-    if(orientationStateRef.current!==orientation){
-      orientationStateRef.current=orientation;
-      gateRef.current.disarm();
+    if(modeStateRef.current!==mode){
+      modeStateRef.current=mode;
+      gateRef.current=new CaptureGate();
       previousFrameRef.current=null;
     }
-  },[orientation]);
+  },[mode]);
 
   useEffect(()=>{
     const updateViewport=()=>{
@@ -110,7 +110,7 @@ export default function CameraCapture({
       setHint('Reading…');
       if(navigator.vibrate) navigator.vibrate(35);
       try{
-        const crop=cropTitleBand(videoRef.current,stageRef.current,orientationRef.current);
+        const crop=cropTitleBand(videoRef.current,stageRef.current,modeRef.current);
         await callbacksRef.current.onCapture(crop);
       }catch(error){
         if(active) callbacksRef.current.onCaptureError?.(error);
@@ -130,7 +130,7 @@ export default function CameraCapture({
       const stage=stageRef.current;
       const bounds=stage?.getBoundingClientRect();
       if(!video||!sampleContext||!bounds||!video.videoWidth||!video.videoHeight) return;
-      const geometry=getGuideGeometry(bounds.width,bounds.height,orientationRef.current);
+      const geometry=getGuideGeometry(bounds.width,bounds.height,modeRef.current);
       const source=mapScreenRectToVideoRect(geometry.frame,bounds.width,bounds.height,video.videoWidth,video.videoHeight);
       if(!source) return;
       sampleCanvas.width=320;
@@ -139,7 +139,7 @@ export default function CameraCapture({
       const gray=grayPixels(sampleContext,sampleCanvas);
       const metrics=evaluateFrame(gray,sampleCanvas.width,sampleCanvas.height,previousFrameRef.current,{
         frame:{x:0,y:0,width:1,height:1},
-        titleBand:GUIDE_CONFIG[orientationRef.current].titleBand
+        titleBand:GUIDE_CONFIG[modeRef.current].titleBand
       });
       previousFrameRef.current=gray;
       if(!metrics.present) setGuideStatus('searching');
@@ -211,7 +211,7 @@ export default function CameraCapture({
     else loopControlRef.current.start?.();
   },[paused]);
 
-  const geometry=viewport.width&&viewport.height?getGuideGeometry(viewport.width,viewport.height,orientation):null;
+  const geometry=viewport.width&&viewport.height?getGuideGeometry(viewport.width,viewport.height,mode):null;
   const statusClass=guideStatus==='reading'
     ?'border-emerald-400 text-emerald-100 shadow-[0_0_0_9999px_rgba(0,0,0,.58)]'
     :guideStatus==='steadying'
@@ -241,9 +241,10 @@ export default function CameraCapture({
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 bg-slate-950 p-3">
-        <div className="flex overflow-hidden border border-slate-600" role="group" aria-label="Card orientation">
-          <button type="button" aria-pressed={orientation==='portrait'} onClick={()=>onOrientationChange('portrait')} className={`min-h-11 px-4 text-sm ${orientation==='portrait'?'bg-indigo-500 text-white':'text-slate-200'}`}>Portrait</button>
-          <button type="button" aria-pressed={orientation==='landscape'} onClick={()=>onOrientationChange('landscape')} className={`min-h-11 px-4 text-sm ${orientation==='landscape'?'bg-indigo-500 text-white':'text-slate-200'}`}>Battlefield</button>
+        <div className="flex overflow-hidden border border-slate-600" role="group" aria-label="Card type">
+          <button type="button" aria-pressed={mode==='portrait'} onClick={()=>onModeChange('portrait')} className={`min-h-11 px-4 text-sm ${mode==='portrait'?'bg-indigo-500 text-white':'text-slate-200'}`}>Portrait</button>
+          <button type="button" aria-pressed={mode==='legend'} onClick={()=>onModeChange('legend')} className={`min-h-11 px-4 text-sm ${mode==='legend'?'bg-indigo-500 text-white':'text-slate-200'}`}>Legend</button>
+          <button type="button" aria-pressed={mode==='landscape'} onClick={()=>onModeChange('landscape')} className={`min-h-11 px-4 text-sm ${mode==='landscape'?'bg-indigo-500 text-white':'text-slate-200'}`}>Battlefield</button>
         </div>
         <button type="button" disabled={paused||Boolean(cameraError)||!cameraReady} onClick={manualCapture} className="min-h-11 rounded-lg bg-indigo-500 px-5 font-semibold disabled:opacity-50">Scan now</button>
       </div>

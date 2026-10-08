@@ -7,10 +7,26 @@ export function normalizeForMatch(text){
 }
 
 export function buildMatcher(definitions){
-  return definitions.map(definition=>({
-    definition_key:definition.definition_key,
-    normalized_name:normalizeForMatch(definition.card_name)
-  })).filter(definition=>definition.normalized_name);
+  const entries=definitions.map(definition=>{
+    const normalizedName=normalizeForMatch(definition.card_name);
+    const comma=String(definition.card_name||'').indexOf(',');
+    const normalizedAlias=comma<0?'':normalizeForMatch(definition.card_name.slice(0,comma));
+    return {
+      definition_key:definition.definition_key,
+      normalized_name:normalizedName,
+      normalized_alias:normalizedAlias&&normalizedAlias!==normalizedName?normalizedAlias:''
+    };
+  }).filter(definition=>definition.normalized_name);
+  const aliasCounts=new Map();
+  for(const definition of entries){
+    if(definition.normalized_alias){
+      aliasCounts.set(definition.normalized_alias,(aliasCounts.get(definition.normalized_alias)||0)+1);
+    }
+  }
+  return entries.map(definition=>({
+    ...definition,
+    normalized_alias:aliasCounts.get(definition.normalized_alias)===1?definition.normalized_alias:''
+  }));
 }
 
 function editDistance(left,right){
@@ -44,20 +60,40 @@ function scoreName(name,ocrWords){
   return Math.max(0,best);
 }
 
+function hasExactName(name,ocrWords){
+  if(!name) return false;
+  const nameWords=name.split(' ');
+  for(let start=0;start<=ocrWords.length-nameWords.length;start++){
+    if(nameWords.every((word,index)=>word===ocrWords[start+index])) return true;
+  }
+  return false;
+}
+
 export function bestMatch(matcher,ocrText){
   const normalized=normalizeForMatch(ocrText);
   if(!normalized) return null;
   const words=normalized.split(' ');
-  let best=null;
-  for(const definition of matcher){
-    const score=scoreName(definition.normalized_name,words);
-    if(score>=(best?.score??MIN_MATCH_SCORE)){
-      if(!best||score>best.score||definition.normalized_name.length>best.nameLength){
-        best={definition_key:definition.definition_key,score,nameLength:definition.normalized_name.length};
+  const tiers=[
+    {name:'normalized_name',exact:true},
+    {name:'normalized_alias',exact:true},
+    {name:'normalized_name',exact:false},
+    {name:'normalized_alias',exact:false}
+  ];
+  for(const tier of tiers){
+    let best=null;
+    for(const definition of matcher){
+      const name=definition[tier.name];
+      if(!name) continue;
+      const exact=hasExactName(name,words);
+      if(tier.exact!==exact) continue;
+      const score=scoreName(name,words);
+      if(score>=(best?.score??MIN_MATCH_SCORE)){
+        if(!best||score>best.score||name.length>best.nameLength){
+          best={definition_key:definition.definition_key,score,nameLength:name.length};
+        }
       }
     }
+    if(best&&best.score>=MIN_MATCH_SCORE) return {definition_key:best.definition_key,score:best.score};
   }
-  return best&&best.score>=MIN_MATCH_SCORE
-    ? {definition_key:best.definition_key,score:best.score}
-    : null;
+  return null;
 }

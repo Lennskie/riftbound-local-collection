@@ -40,3 +40,44 @@ test('distinguishes a rune name from the longer name sharing its suffix',()=>{
   assert.equal(bestMatch(matcher,'Fury Rune')?.definition_key,'fury rune');
   assert.equal(bestMatch(matcher,'Rune')?.definition_key,'rune');
 });
+
+test('matches a champion base-name alias',()=>{
+  const championMatcher=buildMatcher([
+    {definition_key:'volibear-furious',card_name:'Volibear, Furious'}
+  ]);
+  assert.equal(bestMatch(championMatcher,'Volibear')?.definition_key,'volibear-furious');
+  assert.equal(bestMatch(championMatcher,'Volibeer')?.definition_key,'volibear-furious');
+});
+
+test('exact aliases take priority over fuzzy full names',()=>{
+  const championMatcher=buildMatcher([
+    {definition_key:'volibear-furious',card_name:'Volibear, Furious'},
+    {definition_key:'volibeer-stormbringer',card_name:'Volibeer, Stormbringer'}
+  ]);
+  assert.equal(bestMatch(championMatcher,'Volibear')?.definition_key,'volibear-furious');
+});
+
+test('exact full names take priority over exact aliases',()=>{
+  const championMatcher=buildMatcher([
+    {definition_key:'volibear',card_name:'Volibear'},
+    {definition_key:'volibear-furious',card_name:'Volibear, Furious'}
+  ]);
+  assert.equal(bestMatch(championMatcher,'Volibear')?.definition_key,'volibear');
+});
+
+test('fuzzy full names take priority over fuzzy aliases',()=>{
+  const championMatcher=buildMatcher([
+    {definition_key:'volibear-furious',card_name:'Volibear, Furious'},
+    {definition_key:'volibeer-stormbringer',card_name:'Volibeer, Stormbringer'}
+  ]);
+  assert.equal(bestMatch(championMatcher,'Volibeer Stormbrinnger')?.definition_key,'volibeer-stormbringer');
+});
+
+test('does not resolve an alias shared by multiple cards',()=>{
+  const championMatcher=buildMatcher([
+    {definition_key:'volibear-furious',card_name:'Volibear, Furious'},
+    {definition_key:'volibear-stormbringer',card_name:'Volibear, Stormbringer'}
+  ]);
+  assert.equal(bestMatch(championMatcher,'Volibear'),null);
+  assert.equal(bestMatch(championMatcher,'Volibeer'),null);
+});

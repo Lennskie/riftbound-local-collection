@@ -5,17 +5,22 @@ export const GUIDE_CONFIG={
     heightFraction:0.78,
     titleBand:{x:0.05,y:0.48,width:0.9,height:0.17}
   },
-  // Starting title-band placement; confirm against physical Battlefield cards.
+  legend:{
+    aspectRatio:744/1039,
+    widthFraction:0.88,
+    heightFraction:0.78,
+    titleBand:{x:0.05,y:0.68,width:0.9,height:0.15}
+  },
   landscape:{
     aspectRatio:1039/744,
     widthFraction:0.88,
     heightFraction:0.66,
-    titleBand:{x:0.06,y:0.12,width:0.78,height:0.22}
+    titleBand:{x:0.06,y:0.55,width:0.78,height:0.20}
   }
 };
 
-export function getGuideGeometry(width,height,orientation='portrait'){
-  const config=GUIDE_CONFIG[orientation]||GUIDE_CONFIG.portrait;
+export function getGuideGeometry(width,height,mode='portrait'){
+  const config=GUIDE_CONFIG[mode]||GUIDE_CONFIG.portrait;
   const frameWidth=Math.min(width*config.widthFraction,height*config.heightFraction*config.aspectRatio);
   const frameHeight=frameWidth/config.aspectRatio;
   const frame={x:(width-frameWidth)/2,y:(height-frameHeight)/2,width:frameWidth,height:frameHeight};

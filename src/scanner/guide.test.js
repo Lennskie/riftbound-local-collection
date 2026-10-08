@@ -2,15 +2,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {getGuideGeometry,mapScreenRectToVideoRect} from './guide.js';
 
-test('guide frames fit portrait and landscape cards with title bands inside the card',()=>{
+test('guide frames fit all card modes with title bands inside their frames',()=>{
+  const modes=[
+    {name:'portrait',expectedRatio:'portrait'},
+    {name:'legend',expectedRatio:'portrait'},
+    {name:'landscape',expectedRatio:'landscape'}
+  ];
+  for(const {name,expectedRatio} of modes){
+    const {frame,titleBand}=getGuideGeometry(400,700,name);
+    const ratio=frame.width/frame.height;
+    assert.equal(ratio<1?'portrait':'landscape',expectedRatio,name);
+    assert.ok(titleBand.x>=frame.x,name);
+    assert.ok(titleBand.y>=frame.y,name);
+    assert.ok(titleBand.x+titleBand.width<=frame.x+frame.width,name);
+    assert.ok(titleBand.y+titleBand.height<=frame.y+frame.height,name);
+  }
   const portrait=getGuideGeometry(400,700,'portrait');
-  const landscape=getGuideGeometry(400,700,'landscape');
-  assert.ok(portrait.frame.width/portrait.frame.height<1);
-  assert.ok(landscape.frame.width/landscape.frame.height>1);
+  const legend=getGuideGeometry(400,700,'legend');
+  const battlefield=getGuideGeometry(400,700,'landscape');
   assert.ok(portrait.titleBand.y>portrait.frame.y+portrait.frame.height*0.45);
   assert.ok(portrait.titleBand.y<portrait.frame.y+portrait.frame.height*0.55);
-  assert.ok(portrait.titleBand.x>=portrait.frame.x);
-  assert.ok(portrait.titleBand.x+portrait.titleBand.width<=portrait.frame.x+portrait.frame.width);
+  assert.ok(legend.titleBand.y>legend.frame.y+legend.frame.height*0.65);
+  assert.ok(battlefield.titleBand.y>battlefield.frame.y+battlefield.frame.height*0.5);
+  assert.ok(battlefield.titleBand.y<battlefield.frame.y+battlefield.frame.height*0.65);
 });
 
 test('screen crop mapping accounts for object-fit cover cropping',()=>{

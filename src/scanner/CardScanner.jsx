@@ -29,7 +29,7 @@ export default function CardScanner({
   const [ocrProgress,setOcrProgress]=useState('');
   const [ocrError,setOcrError]=useState('');
   const [current,setCurrent]=useState(null);
-  const [orientation,setOrientation]=useState('portrait');
+  const [mode,setMode]=useState('portrait');
   const [finish,setFinish]=useState('normal');
   const [quantity,setQuantity]=useState(()=>clampQuantity(initialQuantity));
   const [zone,setZone]=useState(initialZone==='sideboard'?'sideboard':'main');
@@ -191,8 +191,8 @@ export default function CardScanner({
     <div className="relative flex min-h-0 flex-1 flex-col">
       {catalog&&ocrWorker&&<CameraCapture
         enabled={isValidContainer}
-        orientation={orientation}
-        onOrientationChange={setOrientation}
+        mode={mode}
+        onModeChange={setMode}
         onCapture={handleCapture}
         onCaptureError={error=>{setOcrError(`Could not read the card: ${error.message}`);setResetKey(key=>key+1)}}
         resetKey={resetKey}
