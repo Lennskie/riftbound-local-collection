@@ -29,6 +29,7 @@ export default function CardScanner({
   const [ocrLoad,setOcrLoad]=useState(0);
   const [ocrProgress,setOcrProgress]=useState('');
   const [ocrError,setOcrError]=useState('');
+  const [ocrDebug,setOcrDebug]=useState(null);
   const [current,setCurrent]=useState(null);
   const [mode,setMode]=useState('portrait');
   const [finish,setFinish]=useState('normal');
@@ -103,6 +104,13 @@ export default function CardScanner({
     }));
     const result=await readCard(matcher,bands);
     const definition=result&&catalog.definitions.find(item=>item.definition_key===result.definition_key);
+    if(import.meta.env.DEV){
+      setOcrDebug({
+        text,
+        matchName:definition?.card_name||'No match',
+        score:result?.score??null
+      });
+    }
     const printings=result&&catalog.printingsByDefinition.get(result.definition_key);
     if(!result||!definition||!printings?.length){
       setNotice("Couldn't read that card. Adjust it and try again.");
@@ -179,6 +187,12 @@ export default function CardScanner({
       </div>
       <span aria-hidden="true" className="w-14"/>
     </header>
+
+    {import.meta.env.DEV&&<section aria-label="OCR debugging" className="max-h-28 shrink-0 overflow-y-auto border-b border-amber-500/60 bg-slate-950 px-3 py-2 text-xs">
+      <div className="font-semibold text-amber-200">OCR debug · {ocrDebug?.matchName||'Waiting for scan'}</div>
+      {ocrDebug?.score!=null&&<div className="text-slate-300">Match score: {(ocrDebug.score*100).toFixed(1)}% (minimum {(MIN_MATCH_SCORE*100).toFixed(0)}%)</div>}
+      <pre className="whitespace-pre-wrap break-words text-slate-100">{ocrDebug?(ocrDebug.text||'(OCR returned no text)'):'(waiting for first scan)'}</pre>
+    </section>}
 
     {catalogError?<div className="m-4 space-y-3 rounded-lg border border-red-700 bg-red-950/60 p-4" role="alert">
       <p>Catalogue unavailable: {catalogError}</p>
