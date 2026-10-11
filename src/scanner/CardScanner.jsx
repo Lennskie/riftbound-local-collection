@@ -1,7 +1,8 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {bestMatch,buildMatcher} from './match.js';
+import {buildMatcher} from './match.js';
 import {loadScannerCatalog} from './store.js';
-import {createOcrWorker} from './ocr.js';
+import {buildOcrVariants,createOcrWorker} from './ocr.js';
+import {readCard} from './read.js';
 import {addInventoryCard} from './inventory.js';
 import {zoneForCard} from './zone.js';
 import CameraCapture from './CameraCapture.jsx';
@@ -89,12 +90,18 @@ export default function CardScanner({
     return()=>window.removeEventListener('keydown',closeOnEscape);
   },[onDone]);
 
-  const handleCapture=useCallback(async canvas=>{
+  const handleCapture=useCallback(async crops=>{
     if(!catalog||!matcher||!workerRef.current) throw new Error('The scanner is still initializing');
     setActionError('');
     setNotice('');
-    const text=await workerRef.current.recognize(canvas);
-    const result=bestMatch(matcher,text);
+    // Every band (unit banner position, legend banner position) is read with several image preparations,
+    // cheapest first, and reading stops at the first confident match.
+    const bands=crops.map(crop=>buildOcrVariants(crop).map(prepare=>async()=>{
+      const worker=workerRef.current;
+      if(!worker) throw new Error('The scanner was closed while reading');
+      return worker.recognize(prepare());
+    }));
+    const result=await readCard(matcher,bands);
     const definition=result&&catalog.definitions.find(item=>item.definition_key===result.definition_key);
     const printings=result&&catalog.printingsByDefinition.get(result.definition_key);
     if(!result||!definition||!printings?.length){

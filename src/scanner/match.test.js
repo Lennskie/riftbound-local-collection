@@ -81,3 +81,53 @@ test('does not resolve an alias shared by multiple cards',()=>{
   assert.equal(bestMatch(championMatcher,'Volibear'),null);
   assert.equal(bestMatch(championMatcher,'Volibeer'),null);
 });
+
+const cardPool=[
+  {definition_key:'miss fortune bounty hunter',card_name:'Miss Fortune, Bounty Hunter',type_line:'Legend'},
+  {definition_key:'miss fortune captain',card_name:'Miss Fortune, Captain',type_line:'Unit'},
+  {definition_key:'volibear imposing',card_name:'Volibear, Imposing',type_line:'Unit'},
+  {definition_key:'volibear furious',card_name:'Volibear, Furious',type_line:'Unit'},
+  {definition_key:'teemo',card_name:'Teemo',type_line:'Unit'}
+];
+const poolMatcher=buildMatcher(cardPool);
+
+test('a legend is found from the second name in its banner',()=>{
+  const result=bestMatch(poolMatcher,'Bounty Hunter');
+  assert.equal(result?.definition_key,'miss fortune bounty hunter');
+  assert.equal(result.confident,true);
+});
+
+test('a legend is found when OCR noise splits its type bar from its banner',()=>{
+  assert.equal(bestMatch(poolMatcher,'f8 ET MISS FORTUNE e Bounty Hunter')?.definition_key,'miss fortune bounty hunter');
+});
+
+test('a champion that shares its first name is told apart by the small second name',()=>{
+  assert.equal(bestMatch(poolMatcher,'CHAMPION UNIT VOLIBEAR FRELJORD Ve IMPOSING')?.definition_key,'volibear imposing');
+  assert.equal(bestMatch(poolMatcher,'CHAMPION UNIT VOLIBEAR FRELJORD Volibear IMPOSING')?.definition_key,'volibear imposing');
+});
+
+test('a misread second name is still matched fuzzily',()=>{
+  assert.equal(bestMatch(poolMatcher,'VOLIBEAR IMPOSlNG')?.definition_key,'volibear imposing');
+});
+
+test('a shared first name needs the type bar to pick between a legend and a unit',()=>{
+  assert.equal(bestMatch(poolMatcher,'LEGEND MISS FORTUNE')?.definition_key,'miss fortune bounty hunter');
+  assert.equal(bestMatch(poolMatcher,'CHAMPION UNIT MISS FORTUNE')?.definition_key,'miss fortune captain');
+  assert.equal(bestMatch(poolMatcher,'MISS FORTUNE'),null);
+});
+
+test('a first name shared by two units of the same type stays unresolved without their second names',()=>{
+  assert.equal(bestMatch(poolMatcher,'CHAMPION UNIT VOLIBEAR FRELJORD Volibear'),null);
+});
+
+test('short second names are not matched on their own',()=>{
+  const shortMatcher=buildMatcher([{definition_key:'jax lead',card_name:'Jax, Lead'},{definition_key:'teemo',card_name:'Teemo'}]);
+  assert.equal(bestMatch(shortMatcher,'lead the way'),null);
+});
+
+test('results report their tier so callers can stop on confident matches',()=>{
+  assert.equal(bestMatch(poolMatcher,'Teemo')?.confident,true);
+  const fuzzy=bestMatch(poolMatcher,'Teem0');
+  assert.equal(fuzzy?.definition_key,'teemo');
+  assert.equal(fuzzy.confident,false);
+});

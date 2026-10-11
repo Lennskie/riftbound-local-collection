@@ -1,7 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {CaptureGate,DETECT_CONFIG,evaluateFrame} from './detect.js';
 import {getGuideGeometry,GUIDE_CONFIG,mapScreenRectToVideoRect} from './guide.js';
-import {enhanceTitleCrop} from './ocr.js';
 
 const secureContextHelp='https://github.com/Lennskie/riftbound-local-collection/blob/main/docs/GETTING_STARTED.md#enable-https-for-phone-camera-access';
 
@@ -14,19 +13,25 @@ function grayPixels(context,canvas){
   return gray;
 }
 
-function cropTitleBand(video,stage,mode){
+// Returns one raw (unprocessed) canvas per OCR band; CardScanner applies the OCR preprocessing variants.
+function cropOcrBands(video,stage,mode){
   const bounds=stage?.getBoundingClientRect();
   if(!video||!bounds||!video.videoWidth||!video.videoHeight) throw new Error('The camera frame is not ready yet');
   const geometry=getGuideGeometry(bounds.width,bounds.height,mode);
-  const source=mapScreenRectToVideoRect(geometry.titleBand,bounds.width,bounds.height,video.videoWidth,video.videoHeight);
-  if(!source) throw new Error('The card title band is outside the camera frame');
-  const canvas=document.createElement('canvas');
-  canvas.width=Math.max(1,Math.round(source.width));
-  canvas.height=Math.max(1,Math.round(source.height));
-  const context=canvas.getContext('2d');
-  if(!context) throw new Error('Could not crop the card title band');
-  context.drawImage(video,source.x,source.y,source.width,source.height,0,0,canvas.width,canvas.height);
-  return enhanceTitleCrop(canvas);
+  const crops=[];
+  for(const band of geometry.ocrBands){
+    const source=mapScreenRectToVideoRect(band,bounds.width,bounds.height,video.videoWidth,video.videoHeight);
+    if(!source) continue;
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(source.width));
+    canvas.height=Math.max(1,Math.round(source.height));
+    const context=canvas.getContext('2d');
+    if(!context) throw new Error('Could not crop the card title band');
+    context.drawImage(video,source.x,source.y,source.width,source.height,0,0,canvas.width,canvas.height);
+    crops.push(canvas);
+  }
+  if(!crops.length) throw new Error('The card title band is outside the camera frame');
+  return crops;
 }
 
 export default function CameraCapture({
@@ -110,8 +115,8 @@ export default function CameraCapture({
       setHint('Reading…');
       if(navigator.vibrate) navigator.vibrate(35);
       try{
-        const crop=cropTitleBand(videoRef.current,stageRef.current,modeRef.current);
-        await callbacksRef.current.onCapture(crop);
+        const crops=cropOcrBands(videoRef.current,stageRef.current,modeRef.current);
+        await callbacksRef.current.onCapture(crops);
       }catch(error){
         if(active) callbacksRef.current.onCaptureError?.(error);
       }finally{
@@ -237,13 +242,12 @@ export default function CameraCapture({
           }}/>
         </div>}
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-center text-xs font-medium text-white drop-shadow">
-          {guideStatus==='reading'?'Reading…':guideStatus==='steadying'?'Hold steady…':'Fit the card in the frame; place its name banner in the highlighted band.'}
+          {guideStatus==='reading'?'Reading…':guideStatus==='steadying'?'Hold steady…':'Fit the card in the frame; place its name banner inside the highlighted area.'}
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 bg-slate-950 p-3">
         <div className="flex overflow-hidden border border-slate-600" role="group" aria-label="Card type">
-          <button type="button" aria-pressed={mode==='portrait'} onClick={()=>onModeChange('portrait')} className={`min-h-11 px-4 text-sm ${mode==='portrait'?'bg-indigo-500 text-white':'text-slate-200'}`}>Portrait</button>
-          <button type="button" aria-pressed={mode==='legend'} onClick={()=>onModeChange('legend')} className={`min-h-11 px-4 text-sm ${mode==='legend'?'bg-indigo-500 text-white':'text-slate-200'}`}>Legend</button>
+          <button type="button" aria-pressed={mode==='portrait'} onClick={()=>onModeChange('portrait')} className={`min-h-11 px-4 text-sm ${mode==='portrait'?'bg-indigo-500 text-white':'text-slate-200'}`}>Cards</button>
           <button type="button" aria-pressed={mode==='landscape'} onClick={()=>onModeChange('landscape')} className={`min-h-11 px-4 text-sm ${mode==='landscape'?'bg-indigo-500 text-white':'text-slate-200'}`}>Battlefield</button>
         </div>
         <button type="button" disabled={paused||Boolean(cameraError)||!cameraReady} onClick={manualCapture} className="min-h-11 rounded-lg bg-indigo-500 px-5 font-semibold disabled:opacity-50">Scan now</button>
