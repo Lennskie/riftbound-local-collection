@@ -91,7 +91,7 @@ function titleEdgeDensity(gray,width,height,band){
 export function cardPresenceMetrics(gray,width,height,guide={}){
   assertPixels(gray,width,height);
   const frame=guide.frame||{x:0,y:0,width:1,height:1};
-  const band=guide.titleBand||{x:0.05,y:0.48,width:0.9,height:0.17};
+  const band=guide.titleBand||{x:0.03,y:0.44,width:0.94,height:0.38};
   const framePixels={x:frame.x*width,y:frame.y*height,width:frame.width*width,height:frame.height*height};
   const edges=['left','right','top','bottom'].map(side=>edgeFraction(gray,width,height,framePixels,side));
   const density=titleEdgeDensity(gray,width,height,band);
@@ -117,7 +117,7 @@ function cropRegion(gray,width,height,region){
 
 export function evaluateFrame(gray,width,height,previous,guide={}){
   const present=cardPresence(gray,width,height,guide);
-  const band=guide.titleBand||{x:0.05,y:0.48,width:0.9,height:0.17};
+  const band=guide.titleBand||{x:0.03,y:0.44,width:0.94,height:0.38};
   const crop=cropRegion(gray,width,height,band);
   const sharp=crop.width>=3&&crop.height>=3&&sharpness(crop.gray,crop.width,crop.height)>=DETECT_CONFIG.sharpnessThreshold;
   const difference=previous?frameDifference(previous,gray):Infinity;

@@ -1,11 +1,11 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {buildMatcher} from './match.js';
 import {loadScannerCatalog} from './store.js';
 import {buildOcrVariants,createOcrWorker} from './ocr.js';
 import {readCard} from './read.js';
 import {addInventoryCard} from './inventory.js';
 import {zoneForCard} from './zone.js';
 import CameraCapture from './CameraCapture.jsx';
+import {buildMatcher,MIN_MATCH_SCORE} from './match.js';
 
 function validContainer(container){
   return Boolean(container?.container_id&&container.name&&['bulk','custom','premade'].includes(container.type));
@@ -95,18 +95,30 @@ export default function CardScanner({
     if(!catalog||!matcher||!workerRef.current) throw new Error('The scanner is still initializing');
     setActionError('');
     setNotice('');
-    // Every band (unit banner position, legend banner position) is read with several image preparations,
-    // cheapest first, and reading stops at the first confident match.
-    const bands=crops.map(crop=>buildOcrVariants(crop).map(prepare=>async()=>{
+    const debugTexts=[];
+    const bands=crops.map(crop=>buildOcrVariants(crop,mode).map(prepare=>async()=>{
       const worker=workerRef.current;
       if(!worker) throw new Error('The scanner was closed while reading');
-      return worker.recognize(prepare());
+      const prepared=prepare();
+      try{
+        const text=await worker.recognize(prepared);
+        debugTexts.push(text);
+        return text;
+      }finally{
+        prepared.width=0;
+        prepared.height=0;
+      }
     }));
-    const result=await readCard(matcher,bands);
+    let result;
+    try{
+      result=await readCard(matcher,bands,{maxAttempts:4});
+    }finally{
+      for(const crop of crops){crop.width=0;crop.height=0}
+    }
     const definition=result&&catalog.definitions.find(item=>item.definition_key===result.definition_key);
     if(import.meta.env.DEV){
       setOcrDebug({
-        text,
+        text:debugTexts.join('\n----\n'),
         matchName:definition?.card_name||'No match',
         score:result?.score??null
       });
@@ -118,7 +130,7 @@ export default function CardScanner({
       return;
     }
     setCurrent({definition,printings,printingIndex:0});
-  },[catalog,matcher]);
+  },[catalog,matcher,mode]);
 
   const retry=()=>{
     setCurrent(null);

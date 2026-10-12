@@ -21,12 +21,13 @@ test('guide frames fit both card modes with the OCR bands inside their frames',(
   }
   const portrait=getGuideGeometry(400,700,'portrait');
   const battlefield=getGuideGeometry(400,700,'landscape');
-  const [unitBand,legendBand]=portrait.ocrBands;
-  assert.ok(unitBand.y>portrait.frame.y+portrait.frame.height*0.45);
-  assert.ok(unitBand.y<portrait.frame.y+portrait.frame.height*0.55);
-  assert.ok(legendBand.y>portrait.frame.y+portrait.frame.height*0.65);
-  assert.ok(battlefield.titleBand.y>battlefield.frame.y+battlefield.frame.height*0.5);
-  assert.ok(battlefield.titleBand.y<battlefield.frame.y+battlefield.frame.height*0.65);
+  const [bannerBand,typeBand]=portrait.ocrBands;
+  assert.ok(bannerBand.y>portrait.frame.y+portrait.frame.height*0.40);
+  assert.ok(bannerBand.y<portrait.frame.y+portrait.frame.height*0.50);
+  assert.ok(typeBand.y>portrait.frame.y+portrait.frame.height*0.58);
+  assert.ok(typeBand.y<portrait.frame.y+portrait.frame.height*0.66);
+  assert.ok(battlefield.titleBand.y>battlefield.frame.y+battlefield.frame.height*0.45);
+  assert.ok(battlefield.titleBand.y<battlefield.frame.y+battlefield.frame.height*0.60);
 });
 
 test('the highlighted title band covers every OCR band',()=>{

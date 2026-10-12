@@ -15,6 +15,7 @@ function grayPixels(context,canvas){
 
 // Returns one raw (unprocessed) canvas per OCR band; CardScanner applies the OCR preprocessing variants.
 function cropOcrBands(video,stage,mode){
+  mode=mode==='landscape'?'landscape':'portrait';
   const bounds=stage?.getBoundingClientRect();
   if(!video||!bounds||!video.videoWidth||!video.videoHeight) throw new Error('The camera frame is not ready yet');
   const geometry=getGuideGeometry(bounds.width,bounds.height,mode);
@@ -242,12 +243,12 @@ export default function CameraCapture({
           }}/>
         </div>}
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-center text-xs font-medium text-white drop-shadow">
-          {guideStatus==='reading'?'Reading…':guideStatus==='steadying'?'Hold steady…':'Fit the card in the frame; place its name banner inside the highlighted area.'}
+                    {guideStatus==='reading'?'Reading…':guideStatus==='steadying'?'Hold steady…':'Fit the card in the frame; the highlighted band is what gets scanned.'}
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 bg-slate-950 p-3">
-        <div className="flex overflow-hidden border border-slate-600" role="group" aria-label="Card type">
-          <button type="button" aria-pressed={mode==='portrait'} onClick={()=>onModeChange('portrait')} className={`min-h-11 px-4 text-sm ${mode==='portrait'?'bg-indigo-500 text-white':'text-slate-200'}`}>Cards</button>
+        <div className="flex overflow-hidden border border-slate-600" role="group" aria-label="Card orientation">
+          <button type="button" aria-pressed={mode!=='landscape'} onClick={()=>onModeChange('portrait')} className={`min-h-11 px-4 text-sm ${mode!=='landscape'?'bg-indigo-500 text-white':'text-slate-200'}`}>Portrait</button>
           <button type="button" aria-pressed={mode==='landscape'} onClick={()=>onModeChange('landscape')} className={`min-h-11 px-4 text-sm ${mode==='landscape'?'bg-indigo-500 text-white':'text-slate-200'}`}>Battlefield</button>
         </div>
         <button type="button" disabled={paused||Boolean(cameraError)||!cameraReady} onClick={manualCapture} className="min-h-11 rounded-lg bg-indigo-500 px-5 font-semibold disabled:opacity-50">Scan now</button>

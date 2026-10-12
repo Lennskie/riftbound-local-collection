@@ -1,24 +1,27 @@
 // `ocrBands` are the regions that are cropped and read. Cards come in two layouts:
-//  - units, spells and gear carry their name banner around the middle of the card;
-//  - legends carry theirs lower down.
-// Both are read in the single "portrait" (Cards) mode, so there is no separate legend mode.
+//  - units, spells and gear carry their name banner around the middle of the card,
+//    with the type bar ("CHAMPION UNIT ... FRELJORD") directly below it;
+//  - battlefield cards are wide and carry a single banner lower down.
+// Both portrait layouts are read in the single "portrait" mode, so there is no separate legend mode.
 // `titleBand` is the bounding box of all OCR bands: it is the highlighted area and the region used for focus detection.
 const RAW_GUIDE_CONFIG={
   portrait:{
     aspectRatio:744/1039,
-    widthFraction:0.88,
-    heightFraction:0.78,
+    widthFraction:0.92,
+    heightFraction:0.84,
     ocrBands:[
-      {x:0.05,y:0.48,width:0.9,height:0.17},
-      {x:0.05,y:0.68,width:0.9,height:0.15}
+      // Name banner + subtitle ("Volibear / IMPOSING").
+      {x:0.03,y:0.46,width:0.94,height:0.18},
+      // Type bar + name on legends.
+      {x:0.03,y:0.60,width:0.94,height:0.17}
     ]
   },
   landscape:{
     aspectRatio:1039/744,
-    widthFraction:0.88,
-    heightFraction:0.66,
+    widthFraction:0.90,
+    heightFraction:0.72,
     ocrBands:[
-      {x:0.06,y:0.55,width:0.78,height:0.20}
+      {x:0.05,y:0.50,width:0.82,height:0.26}
     ]
   }
 };

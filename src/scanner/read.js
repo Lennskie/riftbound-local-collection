@@ -12,21 +12,22 @@ function isBetter(candidate,current){
  *          each band is an array of async functions that return OCR text (cheapest/most reliable first).
  * Stops as soon as a confident match is found; otherwise returns the best weaker match, or null.
  */
-export async function readCard(matcher,bands){
+export async function readCard(matcher,bands,{maxAttempts=Infinity}={}){
   let best=null;
+  let used=0;
+  const texts=[];
   for(const attempts of bands){
-    const texts=[];
     for(const attempt of attempts){
+      if(used>=maxAttempts) return best;
+      used++;
       const text=await attempt();
       texts.push(text);
       const result=bestMatch(matcher,text);
       if(result?.confident) return result;
       if(result&&isBetter(result,best)) best=result;
-    }
-    if(texts.length>1){
-      const merged=bestMatch(matcher,texts.join(' '));
-      if(merged?.confident) return merged;
-      if(merged&&isBetter(merged,best)) best=merged;
+      const combined=bestMatch(matcher,texts.join(' '));
+      if(combined?.confident) return combined;
+      if(combined&&isBetter(combined,best)) best=combined;
     }
   }
   return best;

@@ -19,6 +19,14 @@ test('stops at the first confident match without running later attempts',async()
   assert.equal(calls,1);
 });
 
+test('does not exceed the configured attempt limit',async()=>{
+  let calls=0;
+  const counted=[async()=>{calls++;return 'zzqv'},async()=>{calls++;return 'TEEMO'}];
+  const result=await readCard(matcher,[counted],{maxAttempts:1});
+  assert.equal(result,null);
+  assert.equal(calls,1);
+});
+
 test('falls through to a later image preparation when the first one reads garbage',async()=>{
   const result=await readCard(matcher,[reads(['CHAMPION UNIT VOLIBEAR FRELJORD','CHAMPION UNIT VOLIBEAR FRELJORD Ve IMPOSING'])]);
   assert.equal(result.definition_key,'volibear imposing');
@@ -27,6 +35,20 @@ test('falls through to a later image preparation when the first one reads garbag
 test('reads the legend band when the unit band only contains artwork',async()=>{
   const result=await readCard(matcher,[reads(['ee a','i']),reads(['f8 ET MISS FORTUNE e Bounty Hunter'])]);
   assert.equal(result.definition_key,'miss fortune bounty hunter');
+});
+
+test('combines title and type-bar evidence across bands to resolve a champion',async()=>{
+  const sharedNameMatcher=buildMatcher([
+    {definition_key:'volibear-imposing',card_name:'Volibear, Imposing',type_line:'Unit'},
+    {definition_key:'volibear-stormbringer',card_name:'Volibear, Stormbringer',type_line:'Legend'}
+  ]);
+  let laterBandReads=0;
+  const result=await readCard(sharedNameMatcher,[
+    reads(['CHAMPION UNIT']),
+    [async()=>{laterBandReads++;return 'VOLIBEAR'},async()=>{laterBandReads++;return 'unneeded'}]
+  ]);
+  assert.equal(result.definition_key,'volibear-imposing');
+  assert.equal(laterBandReads,1);
 });
 
 test('combines the text of several preparations of the same band',async()=>{

@@ -131,3 +131,25 @@ test('results report their tier so callers can stop on confident matches',()=>{
   assert.equal(fuzzy?.definition_key,'teemo');
   assert.equal(fuzzy.confident,false);
 });
+
+
+const volibearMatcher=buildMatcher([
+  {definition_key:'volibear-imposing',card_name:'Volibear, Imposing',type_line:'Unit'},
+  {definition_key:'volibear-furious',card_name:'Volibear, Furious',type_line:'Unit'},
+  {definition_key:'volibear-stormbringer',card_name:'Volibear, Stormbringer',type_line:'Legend'}
+]);
+
+test('a degraded banner plus degraded subtitle still resolve through combined evidence',()=>{
+  const result=bestMatch(volibearMatcher,'CHAMPION UNIT VOLIBEER FRELJORD IMPOSINE');
+  assert.equal(result?.definition_key,'volibear-imposing');
+});
+
+test('an ambiguous shared alias refuses to guess when nothing distinguishes the family',()=>{
+  assert.equal(bestMatch(volibearMatcher,'VOLIBEER'),null);
+});
+
+test('a fuzzy shared alias is disambiguated by the type bar hint',()=>{
+  const result=bestMatch(volibearMatcher,'LEGEND VOLIBEER');
+  assert.equal(result?.definition_key,'volibear-stormbringer');
+  assert.equal(result.confident,false);
+});
