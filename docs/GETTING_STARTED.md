@@ -57,7 +57,7 @@ The Vite development server proxies `/api` requests to the Express server on por
 
 ### Enable HTTPS for phone camera access
 
-Browsers require a secure context for camera access. On Windows, install [mkcert](https://github.com/FiloSottile/mkcert) and include the PC name or LAN IP that you will use in the browser URL. A reserved LAN IP is useful if you choose the IP address.
+Browsers require a secure context for both the Cards-page card scanner and the QR scanner. Plain HTTP on a LAN does not provide camera access. On Windows, install [mkcert](https://github.com/FiloSottile/mkcert) and include the PC name or LAN IP that you will use in the browser URL. A reserved LAN IP is useful if you choose the IP address.
 
 ```powershell
 mkdir certs
@@ -79,6 +79,8 @@ Run `mkcert -CAROOT` to locate mkcert's root certificate directory. Transfer onl
 Restart `npm run dev`, then open `https://YOUR-PC-NAME:5173` or `https://192.168.1.25:5173` on the phone. The name/IP in the URL must match one of the names used when generating the certificate. The phone and PC must be on the same network, and the firewall must allow port 5173.
 
 For a production build served directly by Express, the same certificate paths enable HTTPS on port 8080. Set `BASE_URL=https://YOUR-PC-NAME:8080` (or the matching LAN IP URL) for links/QR labels, then run `npm run build` and `npm start`. Keep certificate files private and out of source control.
+
+The scanner's OCR worker, WebAssembly core, and English trained data are packaged and served from the app's own origin; the phone does not use a public OCR CDN. The PWA service worker precaches these assets (about 17 MiB in the current build). Artwork is loaded from the same remote image URLs used by the catalog and can be cached for offline reuse after it has been viewed.
 
 ## 5. Start in production
 
@@ -152,6 +154,6 @@ Check:
 3. The PC firewall permits TCP 8080 on the private network.
 4. `BASE_URL` uses the PC's LAN/FQDN address, not `localhost`.
 
-### Camera scanner does not work
+### Card or QR camera scanner does not work
 
-This is expected on ordinary HTTP in browsers that require secure contexts. Use the native phone camera, or put the application behind HTTPS if camera/PWA installation is required.
+This is expected on ordinary HTTP in browsers that require secure contexts. Use HTTPS with a trusted certificate whose host name matches the URL opened on the phone. If HTTPS is not configured, the Cards-page scanner displays a secure-context warning instead of requesting camera access.

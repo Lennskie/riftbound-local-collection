@@ -24,6 +24,18 @@ On the **Containers** page, choose **Delete container** below its entry. Confirm
 
 Use **Location Search** to look up card names or definition keys and see how many copies you own and which containers hold them. Results show the card's printing details and the total quantity across its inventory entries. Clicking a result opens the matching box directly when the card is held in one container, or prompts you to choose a destination box when it is split across multiple containers.
 
+## Cards page scanner
+
+On **Cards**, choose the destination container first, then tap the camera button beside the search field. The scanner checks that a container is selected and that the browser has a secure context before asking for camera permission. Phones require HTTPS with a certificate trusted by the device; see [Getting Started](GETTING_STARTED.md#enable-https-for-phone-camera-access).
+
+Hold a card steady and in focus inside the guide. Automatic capture starts after the card edges and title area are detected as sharp and steady; **Scan now** is available as a manual fallback. The scanner has two modes. **Cards** covers every upright card: units, champions, spells, gear, runes and legends. Fit the card inside the frame and keep its name banner inside the highlighted area; units and legends carry their banner at slightly different heights, and both positions are inside that area. Use **Battlefield** for landscape cards. If the scanner cannot read a title, move or remove the card before holding it in the guide again.
+
+Cards are matched on any part of their name. A name such as "Miss Fortune, Bounty Hunter" can be found from the full name, from the first part ("Miss Fortune"), or from the second part ("Bounty Hunter"). The second part matters because a legend's large gold banner shows only that second part, and a champion's small print ("Imposing" under "Volibear") is often the only thing that tells two champions with the same first name apart. When the first read is not confident, the scanner re-reads the banner with other image preparations (suited to light lettering on gold or orange) and also tries the legend banner position before giving up.
+
+The scanner shows its best definition match and the available printing artwork for visual verification. Swipe or use the arrows/dots to choose the exact printing; the caption includes set, collector number, rarity, variant, and printing ID. Choose **Normal** or **Foil**, the quantity, and (for deck containers) the zone. Runes, legends, battlefields, and all cards added to bulk boxes always use the main zone.
+
+Choose **ADD** to add the selected printing. Server deck-limit or network errors leave the card and its selected printing on screen so you can retry. **RETRY** returns to the live camera without adding anything; **Done** closes the scanner. The camera stays on between cards, and the selected finish, quantity, zone, and orientation remain available during the scanner session.
+
 ## Transfers
 
 On a deck container page, choose a destination and use **Move to destination** on a card row. To restore a locked deck, scan/open its QR page and use **Move N to deck** next to a matching copy found in another container. Transfers update both containers atomically and preserve the card's finish and source zone.

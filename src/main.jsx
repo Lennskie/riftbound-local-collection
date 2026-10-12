@@ -1,8 +1,14 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import QRCode from 'qrcode';
 import {createRoot} from 'react-dom/client';
 import './index.css';
 import {NavLink, ROUTES, getRoute, isValidContainerId, navigate} from './router.js';
+import CardScanner from './scanner/CardScanner.jsx';
+import {addInventoryCard} from './scanner/inventory.js';
+import {zoneForCard} from './scanner/zone.js';
+
+const secureContextWarning='Camera scanning and PWA installation require a secure browser context. Because this app intentionally supports plain HTTP on a home LAN, use your phone’s native camera to scan the sticker QR code or access the app through HTTPS when available.';
+const secureContextDocs='https://github.com/Lennskie/riftbound-local-collection/blob/main/docs/GETTING_STARTED.md#enable-https-for-phone-camera-access';
 
 const tabs=[['dashboard','Dashboard'],['cards','Cards'],['search','Location Search'],['containers','Containers'],['scan','QR Scanner']];
 const routeNames={dashboard:'dashboard',cards:'cards',search:'search',containers:'containers',scan:'scanner'};
@@ -42,7 +48,7 @@ function App(){
   return <div className="min-h-screen">
     <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur"><div className="mx-auto max-w-7xl px-4"><div className="flex items-center gap-4 py-4"><div><div className="text-xl font-bold">Riftbound</div><div className="text-xs text-slate-400">Local Collection Manager</div></div><nav aria-label="Main navigation" className="ml-auto hidden flex-wrap gap-1 md:flex">{navigation()}</nav><button type="button" className="ml-auto flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-slate-700 text-slate-300 md:hidden" aria-label={mobileMenuOpen?'Close navigation menu':'Open navigation menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={()=>setMobileMenuOpen(open=>!open)}><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/><span className="h-px w-5 bg-current"/></button></div>{mobileMenuOpen&&<nav id="mobile-navigation" aria-label="Mobile navigation" className="grid gap-1 border-t border-slate-800 py-3 md:hidden">{navigation()}</nav>}</div></header>
     {error&&<div className="mx-auto max-w-7xl px-4 pt-4"><div className="rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200">{error}</div></div>}
-    <main className="mx-auto max-w-7xl p-4">{route.name==='dashboard'&&<Dashboard containers={containers} catalog={catalog} refresh={refresh}/>} {route.name==='cards'&&<Cards containers={containers}/>} {route.name==='search'&&<LocationSearch/>} {route.name==='containers'&&<Containers containers={containers} refresh={refresh}/>} {route.name==='scanner'&&<Scanner/>}</main>
+    <main className="mx-auto max-w-7xl p-4">{route.name==='dashboard'&&<Dashboard containers={containers} catalog={catalog} refresh={refresh}/>} {route.name==='cards'&&<Cards containers={containers} refresh={refresh}/>} {route.name==='search'&&<LocationSearch/>} {route.name==='containers'&&<Containers containers={containers} refresh={refresh}/>} {route.name==='scanner'&&<Scanner/>}</main>
   </div>
 }
 
@@ -156,8 +162,7 @@ function CardSearch({onAdd,disabled=false,deckType='custom'}){
   },[query]);
   const submit=async card=>{
     setAdding(card.printing_id);setMessage('');
-    const type=String(card.type_line||'').toLowerCase();
-    const cardZone=type.includes('rune')||type.includes('legend')||type.includes('battlefield')?'main':zone;
+    const cardZone=zoneForCard(card.type_line,zone,deckType);
     const ok=await onAdd(card.printing_id,quantity,card.is_foil?'foil':'normal',cardZone);
     setMessage(ok?`Added ${quantity} × ${card.card_name}.`:'Could not add card.');
     setAdding('');
@@ -210,7 +215,7 @@ function Dashboard({containers,catalog,refresh}){const [syncing,setSyncing]=useS
 function Stat({title,value}){return <div className="glass rounded-2xl p-5"><div className="text-sm text-slate-400">{title}</div><div className="mt-2 text-2xl font-bold">{value}</div></div>}
 function ContainerCard({c}){return <NavLink href={`/box/${c.container_id}`} className="glass block rounded-xl p-4 hover:border-indigo-500/50"><div className="flex items-center gap-3">{c.type!=='bulk'&&c.legend_image_url&&<img src={c.legend_image_url} alt={c.legend_name?`${c.legend_name}, deck legend`:'Deck legend'} title={c.legend_name||'Deck legend'} loading="lazy" className="h-24 w-16 shrink-0 rounded object-cover"/>}<div className="min-w-0"><div className="font-semibold">{c.name}</div><div className="mt-1 text-xs uppercase tracking-wide text-slate-500">{c.type}</div><div className="mt-3 text-sm text-slate-300">{c.total_cards} cards</div></div></div></NavLink>}
 
-function Cards({containers}){
+function Cards({containers,refresh}){
   const [q,setQ]=useState('');
   const [setCode,setSetCode]=useState('');
   const [rows,setRows]=useState([]);
@@ -220,29 +225,66 @@ function Cards({containers}){
   const [quantity,setQuantity]=useState(1);
   const [adding,setAdding]=useState('');
   const [message,setMessage]=useState('');
+  const [scannerOpen,setScannerOpen]=useState(false);
+  const containerSelectRef=useRef(null);
+  const selectedContainer=containers.find(item=>item.container_id===container);
   useEffect(()=>{api('/api/cards?limit=1').then(d=>setSets(d.sets||[])).catch(()=>{})},[]);
   useEffect(()=>{const t=setTimeout(()=>api(`/api/cards?q=${encodeURIComponent(q)}&set=${encodeURIComponent(setCode)}&limit=60`).then(d=>setRows(d.cards)).catch(()=>{}),250);return()=>clearTimeout(t)},[q,setCode]);
+  const focusContainer=()=>{
+    containerSelectRef.current?.scrollIntoView({behavior:'smooth',block:'center'});
+    containerSelectRef.current?.focus({preventScroll:true});
+  };
+  const openScanner=()=>{
+    setMessage('');
+    if(!container){
+      setMessage('Choose a container to add scanned cards to.');
+      focusContainer();
+      return;
+    }
+    if(!selectedContainer){
+      setContainer('');
+      setMessage('That container is no longer available. Choose another container.');
+      focusContainer();
+      return;
+    }
+    if(!window.isSecureContext){
+      setMessage(secureContextWarning);
+      return;
+    }
+    setScannerOpen(true);
+  };
   const add=async card=>{
     if(!container)return;
     setAdding(card.printing_id);setMessage('');
     try{
-      const type=String(card.type_line||'').toLowerCase();
-      const cardZone=type.includes('rune')||type.includes('legend')||type.includes('battlefield')?'main':(containers.find(c=>c.container_id===container)?.type==='bulk'?'main':zone);
+      const cardZone=zoneForCard(card.type_line,zone,selectedContainer?.type);
       const finish=card.is_foil?'foil':'normal';
-      await api(`/api/containers/${container}/inventory/bulk`,{method:'POST',body:JSON.stringify({cards:[{printing_id:card.printing_id,quantity,finish,zone:cardZone}]})});
-      setMessage(`Added ${quantity} × ${card.card_name} to ${containers.find(c=>c.container_id===container)?.name||'container'}.`);
+      await addInventoryCard(container,{printing_id:card.printing_id,quantity,finish,zone:cardZone});
+      setMessage(`Added ${quantity} × ${card.card_name} to ${selectedContainer?.name||'container'}.`);
     }catch(e){setMessage(e.message)}finally{setAdding('')}
   };
   return <section>
     <h1 className="text-3xl font-bold">Card catalog</h1>
-    <div className="my-5 grid gap-3 md:grid-cols-[1fr_220px]"><input className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-3" placeholder="Search card or definition…" value={q} onChange={e=>setQ(e.target.value)}/><select className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-3" value={setCode} onChange={e=>setSetCode(e.target.value)}><option value="">All sets</option>{sets.map(s=><option key={s.set_code} value={s.set_code}>{s.set_code} — {s.set_label}</option>)}</select></div>
+    <div className="my-5 grid grid-cols-[minmax(0,1fr)_48px] gap-3 md:grid-cols-[minmax(0,1fr)_48px_220px]">
+      <input className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 py-3" placeholder="Search card or definition…" value={q} onChange={e=>setQ(e.target.value)}/>
+      <button type="button" onClick={openScanner} aria-label="Scan cards with camera" title="Scan cards with camera" className="flex min-h-12 min-w-12 items-center justify-center rounded-lg bg-indigo-500">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      </button>
+      <select className="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-3 md:col-span-1" value={setCode} onChange={e=>setSetCode(e.target.value)}><option value="">All sets</option>{sets.map(s=><option key={s.set_code} value={s.set_code}>{s.set_code} — {s.set_label}</option>)}</select>
+    </div>
     <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-800 p-3">
-      <label className="min-w-52 flex-1 text-sm text-slate-400">Add to container<select className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={container} onChange={e=>setContainer(e.target.value)}><option value="">Choose a container</option>{containers.map(c=><option key={c.container_id} value={c.container_id}>{c.name} ({c.type})</option>)}</select></label>
+      <label className="min-w-52 flex-1 text-sm text-slate-400">Add to container<select ref={containerSelectRef} className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={container} onChange={e=>setContainer(e.target.value)}><option value="">Choose a container</option>{containers.map(c=><option key={c.container_id} value={c.container_id}>{c.name} ({c.type})</option>)}</select></label>
       <label className="text-sm text-slate-400">Quantity<input type="number" min="1" step="1" className="mt-1 w-24 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={quantity} onChange={e=>setQuantity(Math.max(1,Number(e.target.value)||1))}/></label>
       {containers.find(c=>c.container_id===container)?.type!=='bulk'&&<label className="text-sm text-slate-400">Zone<select className="mt-1 w-36 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white" value={zone} onChange={e=>setZone(e.target.value)}><option value="main">Main deck</option><option value="sideboard">Sideboard</option></select></label>}
-      {message&&<div className="basis-full text-sm text-slate-300" role="status">{message}</div>}
+      {message&&<div className="basis-full text-sm text-slate-300" role="status">{message}{message===secureContextWarning&&<> <a className="underline" href={secureContextDocs} target="_blank" rel="noreferrer">HTTPS setup instructions</a>.</>}</div>}
     </div>
     <div className="card-grid">{rows.map(r=><article key={r.printing_id} className="glass rounded-xl p-2"><img className="card-art" src={r.image_url||''} alt={r.card_name}/><div className="p-2"><div className="font-medium text-sm">{r.card_name}</div><div className="text-xs text-slate-500">{r.set_code} #{r.collector_num} · {r.rarity||'—'}</div><button disabled={!container||adding===r.printing_id} onClick={()=>add(r)} className="mt-2 w-full rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium disabled:opacity-40">{adding===r.printing_id?'Adding…':'Add to container'}</button></div></article>)}</div>
+    {scannerOpen&&selectedContainer&&<CardScanner
+      container={selectedContainer}
+      initialQuantity={quantity}
+      initialZone={zone}
+      onDone={()=>{setScannerOpen(false);if(refresh)void refresh()}}
+    />}
   </section>;
 }
 

@@ -11,6 +11,7 @@ import {fetchCatalog,syncCatalog} from './catalog.js';
 import {summarizeDeck} from './deck-rules.js';
 import {importRiftatlasDeck,previewRiftatlasImport} from './riftatlas.js';
 import {addInventoryBulk,deleteInventoryEntry,setInventoryQuantity,transferInventory} from './inventory.js';
+import {registerScannerRoutes} from './scanner.js';
 
 const PORT=Number(process.env.PORT||8080), HOST=process.env.HOST||'0.0.0.0';
 const db=openDb(process.env.DATABASE_PATH||'data/riftbound.db');
@@ -22,6 +23,7 @@ let syncState=meta('last_sync')?'idle':'empty'; let syncPromise=null;
 async function doSync(){if(syncPromise)return syncPromise; syncState='syncing'; syncPromise=(async()=>{try{const payload=await fetchCatalog(process.env.CATALOG_API_URL||'https://api.rifthunt.com/bulk/cards');const count=syncCatalog(db,payload);syncState='idle';return count}catch(e){syncState='error';setMeta('last_error',`${new Date().toISOString()} ${e.stack||e.message}`);throw e}finally{syncPromise=null}})();return syncPromise}
 
 app.get('/api/config',(req,res)=>res.json({base_url:process.env.BASE_URL||null}));
+registerScannerRoutes(app,db);
 app.get('/api/catalog/status',(req,res)=>res.json({status:syncState,last_sync:meta('last_sync'),last_count:Number(meta('last_count')||0),last_error:meta('last_error')}));
 app.post('/api/catalog/sync',(req,res)=>{doSync().then(count=>res.status(202).json({status:'syncing',count})).catch(e=>res.status(502).json({error:e.message}))});
 app.get('/api/cards',(req,res)=>{const q=String(req.query.q||'').trim(),set=String(req.query.set||'').trim(),limit=Math.min(200,Math.max(1,Number(req.query.limit||60))),offset=Math.max(0,Number(req.query.offset||0));res.json(listCards(db,{q,set,limit,offset}))});

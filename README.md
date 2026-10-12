@@ -11,6 +11,7 @@ A self-hosted React/Vite PWA with an Express + SQLite backend for tracking physi
 - Card definition/printing separation and normal/foil inventory.
 - Container CRUD, inventory updates, atomic transfers, premade blueprints, shortfall calculation.
 - Catalog status, background boot sync, manual sync, and location-aware card search.
+- Cards-page camera scanning with automatic on-device OCR, fuzzy matching, printing-art verification, and local catalogue caching.
 - QR scanner UI with a secure-context warning for plain HTTP.
 - PWA manifest with an installable icon and documentation in `docs/`.
 

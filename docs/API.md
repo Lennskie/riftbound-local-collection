@@ -69,6 +69,47 @@ This is a low-level replacement endpoint for premade or custom deck containers. 
 
 The sync endpoint starts a server-side Rifthunt fetch.
 
+## Scanner catalogue
+
+The Cards-page scanner downloads a compact local catalogue snapshot. Both routes return `Cache-Control: no-store`.
+
+### `GET /api/scanner/version`
+
+Returns the current integer scanner catalogue version from `catalog_meta`; this version check does not build or query the full index.
+
+```json
+{"version":18}
+```
+
+### `GET /api/scanner/index`
+
+Returns the version with active definitions and printings. Definitions are included only when they have an active printing. The index omits card text, flavour, artist, and provider-only IDs.
+
+```json
+{
+  "version":18,
+  "definitions":[
+    {"definition_key":"teemo","card_name":"Teemo","type_line":"Champion Unit"}
+  ],
+  "printings":[
+    {
+      "printing_id":"ogn-121a-298",
+      "definition_key":"teemo",
+      "set_code":"OGN",
+      "collector_num":121,
+      "rarity":"Rare",
+      "variant_label":null,
+      "alternate_art":0,
+      "overnumbered":0,
+      "signature":0,
+      "image_url":"https://example.invalid/card.webp"
+    }
+  ]
+}
+```
+
+The phone stores this response in IndexedDB and checks the version before downloading it again. Camera frames and OCR text are processed on-device and are never sent to these endpoints or the remote catalog provider.
+
 ### `GET /api/config`
 
 Returns the configured `BASE_URL` for QR generation.
