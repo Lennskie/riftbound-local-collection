@@ -1,5 +1,9 @@
-const RECYCLE_AFTER=30;
-const MAX_OCR_WIDTH=720;
+import {scannerLog} from './log.js';
+
+const RECYCLE_AFTER=12;
+export const MAX_OCR_WIDTH=720;
+// A recognition that takes this long is treated as a hung worker: it is rebuilt and that read counts as empty text.
+const RECOGNIZE_TIMEOUT_MS=10000;
 
 export async function createOcrWorker(onProgress=()=>{}){
   const {createWorker}=await import('tesseract.js');
@@ -19,17 +23,31 @@ export async function createOcrWorker(onProgress=()=>{}){
   };
   let worker=await make();
   let uses=0;
+  const rebuild=async()=>{
+    // Free the old WASM heap before allocating the new one so two workers never coexist.
+    await worker.terminate().catch(()=>{});
+    worker=await make();
+    uses=0;
+  };
   return {
     async recognize(canvas){
-      if(uses>=RECYCLE_AFTER){
-        const old=worker;
-        worker=await make();
-        uses=0;
-        void old.terminate().catch(()=>{});
-      }
+      if(uses>=RECYCLE_AFTER) await rebuild();
       uses++;
-      const {data}=await worker.recognize(canvas);
-      return data.text.trim();
+      const job=worker.recognize(canvas);
+      job.catch(()=>{});
+      let timer;
+      const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve(null),RECOGNIZE_TIMEOUT_MS)});
+      try{
+        const result=await Promise.race([job,timeout]);
+        if(result===null){
+          scannerLog('ocr timed out, rebuilding worker',{ms:RECOGNIZE_TIMEOUT_MS});
+          await rebuild();
+          return '';
+        }
+        return result.data.text.trim();
+      }finally{
+        clearTimeout(timer);
+      }
     },
     terminate:()=>worker.terminate()
   };
@@ -57,7 +75,7 @@ export function percentileThreshold(gray,fraction=0.88){
 // Local adaptive version of the same idea: a pixel is text when it is clearly brighter than its neighbourhood.
 export function adaptiveBrightThreshold(gray,width,height,radius,offset){
   const stride=width+1;
-  const integral=new Float64Array(stride*(height+1));
+  const integral=new Uint32Array(stride*(height+1));
   for(let y=0;y<height;y++){
     let rowSum=0;
     for(let x=0;x<width;x++){
@@ -78,7 +96,21 @@ export function adaptiveBrightThreshold(gray,width,height,radius,offset){
   return output;
 }
 
+const scratch=new WeakMap();
+
+// Releases the shared scratch canvas created for a crop. Call once every variant of that crop has been read.
+export function releaseOcrScratch(source){
+  const state=scratch.get(source);
+  if(!state) return;
+  state.canvas.width=0;
+  state.canvas.height=0;
+  scratch.delete(source);
+}
+
+// One canvas, ImageData and gray buffer per crop, shared by all of its OCR variants (they run one after another).
 function readGray(source){
+  const cached=scratch.get(source);
+  if(cached) return cached;
   const scale=Math.min(1,MAX_OCR_WIDTH/source.width);
   const canvas=document.createElement('canvas');
   canvas.width=Math.max(1,Math.round(source.width*scale));
@@ -91,7 +123,9 @@ function readGray(source){
   for(let index=0,target=0;index<image.data.length;index+=4,target++){
     gray[target]=Math.round(image.data[index]*0.299+image.data[index+1]*0.587+image.data[index+2]*0.114);
   }
-  return {canvas,context,image,gray};
+  const state={canvas,context,image,gray};
+  scratch.set(source,state);
+  return state;
 }
 
 function writeGray({canvas,context,image},gray){
@@ -151,7 +185,7 @@ export function buildOcrVariants(source,mode='portrait'){
 // black text on a white background for Tesseract; the live camera preview is untouched.
 export function adaptiveDarkThreshold(gray,width,height,radius,offset){
   const stride=width+1;
-  const integral=new Float64Array(stride*(height+1));
+  const integral=new Uint32Array(stride*(height+1));
   for(let y=0;y<height;y++){
     let rowSum=0;
     for(let x=0;x<width;x++){

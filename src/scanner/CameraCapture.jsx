@@ -1,12 +1,12 @@
 import {useEffect,useRef,useState} from 'react';
 import {CaptureGate,DETECT_CONFIG,evaluateFrame} from './detect.js';
 import {getGuideGeometry,GUIDE_CONFIG,mapScreenRectToVideoRect} from './guide.js';
+import {MAX_OCR_WIDTH} from './ocr.js';
 
 const secureContextHelp='https://github.com/Lennskie/riftbound-local-collection/blob/main/docs/GETTING_STARTED.md#enable-https-for-phone-camera-access';
 
-function grayPixels(context,canvas){
+function grayPixels(context,canvas,gray){
   const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
-  const gray=new Uint8Array(canvas.width*canvas.height);
   for(let source=0,target=0;source<pixels.length;source+=4,target++){
     gray[target]=Math.round(pixels[source]*0.299+pixels[source+1]*0.587+pixels[source+2]*0.114);
   }
@@ -24,8 +24,10 @@ function cropOcrBands(video,stage,mode){
     const source=mapScreenRectToVideoRect(band,bounds.width,bounds.height,video.videoWidth,video.videoHeight);
     if(!source) continue;
     const canvas=document.createElement('canvas');
-    canvas.width=Math.max(1,Math.round(source.width));
-    canvas.height=Math.max(1,Math.round(source.height));
+    // Draw straight at OCR size; the full-resolution band is never allocated.
+    const scale=Math.min(1,MAX_OCR_WIDTH/source.width);
+    canvas.width=Math.max(1,Math.round(source.width*scale));
+    canvas.height=Math.max(1,Math.round(source.height*scale));
     const context=canvas.getContext('2d');
     if(!context) throw new Error('Could not crop the card title band');
     context.drawImage(video,source.x,source.y,source.width,source.height,0,0,canvas.width,canvas.height);
@@ -55,6 +57,7 @@ export default function CameraCapture({
   const resetKeyRef=useRef(resetKey);
   const modeStateRef=useRef(mode);
   const previousFrameRef=useRef(null);
+  const grayBuffersRef=useRef([null,null]);
   const captureInFlightRef=useRef(false);
   const [viewport,setViewport]=useState({width:0,height:0});
   const [cameraError,setCameraError]=useState('');
@@ -139,10 +142,21 @@ export default function CameraCapture({
       const geometry=getGuideGeometry(bounds.width,bounds.height,modeRef.current);
       const source=mapScreenRectToVideoRect(geometry.frame,bounds.width,bounds.height,video.videoWidth,video.videoHeight);
       if(!source) return;
-      sampleCanvas.width=320;
-      sampleCanvas.height=Math.max(3,Math.round(source.height*sampleCanvas.width/source.width));
+      const sampleHeight=Math.max(3,Math.round(source.height*320/source.width));
+      // Resizing a canvas reallocates its backing store, so only do it when the size really changes.
+      if(sampleCanvas.width!==320) sampleCanvas.width=320;
+      if(sampleCanvas.height!==sampleHeight) sampleCanvas.height=sampleHeight;
       sampleContext.drawImage(video,source.x,source.y,source.width,source.height,0,0,sampleCanvas.width,sampleCanvas.height);
-      const gray=grayPixels(sampleContext,sampleCanvas);
+      const length=sampleCanvas.width*sampleCanvas.height;
+      let buffers=grayBuffersRef.current;
+      if(!buffers[0]||buffers[0].length!==length){
+        buffers=[new Uint8Array(length),new Uint8Array(length)];
+        grayBuffersRef.current=buffers;
+        previousFrameRef.current=null;
+      }
+      // Two buffers are swapped each tick: one holds the previous frame, the other receives the new one.
+      const gray=buffers[0]===previousFrameRef.current?buffers[1]:buffers[0];
+      grayPixels(sampleContext,sampleCanvas,gray);
       const metrics=evaluateFrame(gray,sampleCanvas.width,sampleCanvas.height,previousFrameRef.current,{
         frame:{x:0,y:0,width:1,height:1},
         titleBand:GUIDE_CONFIG[modeRef.current].titleBand
@@ -213,8 +227,14 @@ export default function CameraCapture({
   },[enabled]);
 
   useEffect(()=>{
-    if(paused) loopControlRef.current.stop?.();
-    else loopControlRef.current.start?.();
+    const video=videoRef.current;
+    if(paused){
+      loopControlRef.current.stop?.();
+      video?.pause?.();
+    }else{
+      video?.play?.()?.catch?.(()=>{});
+      loopControlRef.current.start?.();
+    }
   },[paused]);
 
   const geometry=viewport.width&&viewport.height?getGuideGeometry(viewport.width,viewport.height,mode):null;

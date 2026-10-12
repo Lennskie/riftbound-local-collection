@@ -13,6 +13,7 @@ const SECOND_FIELD_BONUS=0.25;
 // A fuzzy alias needs this much similarity before it counts as supporting evidence.
 const MIN_SUPPORT_SCORE=0.6;
 
+
 // Tier order, best first. A result with `tier <= LAST_CONFIDENT_TIER` is exact enough to stop scanning further.
 export const TIERS=[
   {field:'normalized_name',exact:true},
@@ -75,36 +76,84 @@ export function buildMatcher(definitions){
   });
 }
 
-function editDistance(left,right){
-  let previous=Array.from({length:right.length+1},(_,index)=>index);
+let rowA=new Uint16Array(128),rowB=new Uint16Array(128);
+// Returns the edit distance, or maxDistance+1 as soon as it is certain the distance exceeds maxDistance.
+function editDistance(left,right,maxDistance=Infinity){
+  const width=right.length+1;
+  if(width>rowA.length){rowA=new Uint16Array(width*2);rowB=new Uint16Array(width*2)}
+  let previous=rowA,current=rowB;
+  for(let column=0;column<width;column++) previous[column]=column;
   for(let row=1;row<=left.length;row++){
-    const current=[row];
-    for(let column=1;column<=right.length;column++){
-      current[column]=Math.min(
-        current[column-1]+1,
-        previous[column]+1,
-        previous[column-1]+(left[row-1]===right[column-1]?0:1)
-      );
+    current[0]=row;
+    let rowMinimum=row;
+    for(let column=1;column<width;column++){
+      const substitution=previous[column-1]+(left.charCodeAt(row-1)===right.charCodeAt(column-1)?0:1);
+      const insertion=current[column-1]+1,deletion=previous[column]+1;
+      const value=substitution<insertion?(substitution<deletion?substitution:deletion):(insertion<deletion?insertion:deletion);
+      current[column]=value;
+      if(value<rowMinimum) rowMinimum=value;
     }
-    previous=current;
+    if(rowMinimum>maxDistance) return maxDistance+1;
+    const swap=previous;previous=current;current=swap;
   }
   return previous[right.length];
 }
 
+// Every caller discards scores below the lowest threshold in use, so windows that cannot reach it are not scored.
+const SCORE_FLOOR=Math.min(MIN_SUPPORT_SCORE,MIN_MATCH_SCORE,MIN_SUBTITLE_SCORE);
+// Scores are cached per name for the duration of one bestMatch call (the OCR words do not change within it).
+let nameScores=null;
+// OCR word windows (text + letter counts) are built once per bestMatch call and shared by every name.
+let windowCache=null;
+
+function letterCounts(text){
+  const counts=new Uint8Array(37);
+  for(let index=0;index<text.length;index++){
+    const code=text.charCodeAt(index);
+    counts[code>=97&&code<=122?code-97:code>=48&&code<=57?code-22:36]++;
+  }
+  return counts;
+}
+
+function windowAt(words,start,end){
+  const key=start*32+(end-start);
+  let entry=windowCache.get(key);
+  if(!entry){
+    const text=words.slice(start,end).join(' ');
+    entry={text,counts:letterCounts(text)};
+    windowCache.set(key,entry);
+  }
+  return entry;
+}
+
 function scoreNameDetailed(name,ocrWords){
+  const cached=nameScores&&nameScores.get(name);
+  if(cached) return cached;
   let best={score:0,distance:Infinity};
+  const nameWordCount=name.split(' ').length;
+  const nameCounts=letterCounts(name);
   for(let start=0;start<ocrWords.length;start++){
-    for(let end=start+1;end<=ocrWords.length;end++){
-      const candidate=ocrWords.slice(start,end).join(' ');
-      const distance=editDistance(name,candidate);
-      const similarity=1-distance/Math.max(name.length,candidate.length);
+    const maxEnd=Math.min(ocrWords.length,start+nameWordCount+2);
+    for(let end=start+1;end<=maxEnd;end++){
+      const window=windowAt(ocrWords,start,end);
+      const candidate=window.text;
+      const longest=Math.max(name.length,candidate.length);
+      const bar=Math.max(SCORE_FLOOR,best.score);
+      if(1-Math.abs(name.length-candidate.length)/longest<bar) continue;
+      const allowed=Math.floor((1-bar)*longest);
+      // Edit distance is at least (longer length - letters the two strings share), so most windows are rejected
+      // here in 37 steps instead of a full edit-distance table.
+      let shared=0;
+      for(let bucket=0;bucket<37;bucket++) shared+=nameCounts[bucket]<window.counts[bucket]?nameCounts[bucket]:window.counts[bucket];
+      if(longest-shared>allowed) continue;
+      const distance=editDistance(name,candidate,allowed);
+      const similarity=1-distance/longest;
       const unusedWords=ocrWords.length-(end-start);
-      // Penalties are capped so a longer OCR region (type bar + rules text) cannot
-      // drown out a genuine name match.
       const score=similarity-Math.min(unusedWords,12)*0.006-start*0.002;
       if(score>best.score) best={score:Math.max(0,score),distance};
     }
   }
+  if(nameScores) nameScores.set(name,best);
   return best;
 }
 
@@ -184,11 +233,35 @@ function compareCandidates(left,right){
     (left.definition_key<right.definition_key?-1:left.definition_key>right.definition_key?1:0);
 }
 
+const keyIndexes=new WeakMap();
+function indexByKey(matcher){
+  let byKey=keyIndexes.get(matcher);
+  if(!byKey){
+    byKey=new Map(matcher.map(definition=>[definition.definition_key,definition]));
+    keyIndexes.set(matcher,byKey);
+  }
+  return byKey;
+}
+
+// Name banners are short; ignoring very long OCR tails keeps matching cost bounded.
+const MAX_OCR_WORDS=40;
+
 export function bestMatch(matcher,ocrText){
+  nameScores=new Map();
+  windowCache=new Map();
+  try{
+    return matchWithScores(matcher,ocrText);
+  }finally{
+    nameScores=null;
+    windowCache=null;
+  }
+}
+
+function matchWithScores(matcher,ocrText){
   const normalized=normalizeForMatch(ocrText);
   if(!normalized) return null;
-  const words=normalized.split(' ');
-  const byKey=new Map(matcher.map(definition=>[definition.definition_key,definition]));
+  const words=normalized.split(' ').slice(0,MAX_OCR_WORDS);
+  const byKey=indexByKey(matcher);
   for(const [tierIndex,tier] of TIERS.entries()){
     const threshold=tier.threshold??MIN_MATCH_SCORE;
     if(tier.byType){
