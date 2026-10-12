@@ -15,8 +15,8 @@ A self-hosted React/Vite PWA with an Express + SQLite backend for tracking physi
 - QR scanner UI with a secure-context warning for plain HTTP.
 - PWA manifest with an installable icon and documentation in `docs/`.
 
-[!WARNING]
-Cards must be perfectly aligned within the portrait frame during camera scanning to prevent RAM issues.
+> [!WARNING]
+> Cards must be perfectly aligned within the portrait frame during camera scanning to prevent RAM issues.
 
 ## Quick start
 
