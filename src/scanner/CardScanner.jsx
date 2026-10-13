@@ -197,8 +197,8 @@ export default function CardScanner({
   const singlePrinting=current?.printings.length===1;
   const forcedMain=current&&zoneForCard(current.definition.type_line,'sideboard',container.type)==='main';
 
-  return <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white" style={{backgroundColor:'#07111a'}}>
-    <header className="z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-700 px-3 py-2" style={{backgroundColor:'#0b1720'}}>
+  return <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-scanner text-white">
+    <header className="z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-700 bg-scanner-bar px-3 py-2">
       <button type="button" onClick={()=>onDone?.()} className="min-h-11 px-3 font-semibold">Done</button>
       <div className="min-w-0 flex-1 text-center">
         <div className="truncate font-semibold">{container.name}</div>
@@ -241,15 +241,15 @@ export default function CardScanner({
 
       {notice&&!current&&<div className="z-10 px-4 py-2 text-center text-sm text-amber-100" role="status">{notice}</div>}
 
-      {current&&selectedPrinting&&<div className="absolute inset-0 z-10 flex flex-col overflow-y-auto" style={{backgroundColor:'rgba(4,10,15,.97)'}}>
+      {current&&selectedPrinting&&<div className="absolute inset-0 z-10 flex flex-col overflow-y-auto bg-scanner-panel/97">
         <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-4 pb-3 pt-3">
           <h1 className="mb-3 text-center text-2xl font-bold">{current.definition.card_name}</h1>
           <div className="flex min-h-0 flex-1 items-center justify-center gap-2">
             {!singlePrinting&&<button type="button" onClick={()=>selectPrinting((current.printingIndex||0)-1)} aria-label="Previous printing" className="min-h-11 px-3 text-2xl">‹</button>}
             <div className="flex min-h-0 flex-1 justify-center">
               {selectedPrinting.image_url
-                ?<img src={selectedPrinting.image_url} alt={`${current.definition.card_name} printing artwork`} className="max-h-[38vh] max-w-full object-contain"/>
-                :<div className="flex aspect-[744/1039] max-h-[38vh] items-center justify-center border border-slate-600 px-6 text-sm text-slate-300">Artwork unavailable</div>}
+                ?<img src={selectedPrinting.image_url} alt={`${current.definition.card_name} printing artwork`} className="max-h-artwork max-w-full object-contain"/>
+                :<div className="flex aspect-artwork max-h-artwork items-center justify-center border border-slate-600 px-6 text-sm text-slate-300">Artwork unavailable</div>}
             </div>
             {!singlePrinting&&<button type="button" onClick={()=>selectPrinting((current.printingIndex||0)+1)} aria-label="Next printing" className="min-h-11 px-3 text-2xl">›</button>}
           </div>
@@ -290,7 +290,7 @@ export default function CardScanner({
               {forcedMain&&<span className="text-xs text-slate-300">Always main</span>}
             </label>}
           </div>
-          <div className="sticky bottom-0 mt-auto flex gap-3 py-3" style={{backgroundColor:'rgba(4,10,15,.97)'}}>
+          <div className="sticky bottom-0 mt-auto flex gap-3 bg-scanner-panel/97 py-3">
             <button type="button" onClick={retry} className="min-h-12 flex-1 border border-slate-400 font-semibold">RETRY</button>
             <button type="button" disabled={saving} onClick={addCurrent} className="min-h-12 flex-1 bg-indigo-500 font-semibold disabled:opacity-50">{saving?'Adding…':'ADD'}</button>
           </div>

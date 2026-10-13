@@ -239,10 +239,10 @@ export default function CameraCapture({
 
   const geometry=viewport.width&&viewport.height?getGuideGeometry(viewport.width,viewport.height,mode):null;
   const statusClass=guideStatus==='reading'
-    ?'border-emerald-400 text-emerald-100 shadow-[0_0_0_9999px_rgba(0,0,0,.58)]'
+    ?'border-emerald-400 text-emerald-100 shadow-vignette'
     :guideStatus==='steadying'
-      ?'border-amber-300 text-amber-100 shadow-[0_0_0_9999px_rgba(0,0,0,.58)]'
-      :'border-white text-white shadow-[0_0_0_9999px_rgba(0,0,0,.58)]';
+      ?'border-amber-300 text-amber-100 shadow-vignette'
+      :'border-white text-white shadow-vignette';
   const manualCapture=()=>{
     if(!paused&&!cameraError&&cameraReady&&!captureInFlightRef.current){
       gateRef.current.manualCapture();
