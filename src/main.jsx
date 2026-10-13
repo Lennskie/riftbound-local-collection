@@ -63,11 +63,14 @@ function BoxPage({id}){
   const [locations,setLocations]=useState([]);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
-  const [moveTarget,setMoveTarget]=useState(id);
+  const [moveTarget,setMoveTarget]=useState('');
   const [moveZone,setMoveZone]=useState('sideboard');
+  const [scanMessage,setScanMessage]=useState('');
+  const [scannerOpen,setScannerOpen]=useState(false);
   const [notice,setNotice]=useState('');
   const [riftatlasText,setRiftatlasText]=useState('');
   const [riftatlasPreview,setRiftatlasPreview]=useState(null);
+  const destinationScannerProcessingRef=useRef(false);
   const load=useCallback(async()=>{
     try{const [next,all]=await Promise.all([api(`/api/containers/${id}`),api('/api/containers')]);setData(next);setLocations(all.containers);setErr('');return true}
     catch(e){setErr(e.message);return false}
@@ -122,12 +125,117 @@ function BoxPage({id}){
     const quantity=Math.min(source.quantity,shortfall.shortfall);
     if(await transfer({from:source.container_id,to:id,printing_id:source.printing_id,finish:source.finish,from_zone:source.zone,to_zone:'main',quantity}))setNotice(`Moved ${quantity} × ${shortfall.card_name} from ${source.container_name}.`);
   };
-  const moveCard=async card=>{
-    if(!moveTarget)return setErr('Choose a destination container first.');
+  const destination = data ? locations.find(container=>String(container.container_id)===String(moveTarget))||null : null;
+  const currentDeckMove = !!data && (moveTarget===''||String(moveTarget)===String(id));
+  const canMoveCards = Boolean(data) && (data.container.type === 'bulk' || Boolean(data.deck_rules));
+  const moveEnabled=()=>{
+    if(!data || !canMoveCards) return false;
+    if(data.container.type === 'bulk') return Boolean(moveTarget) && String(moveTarget)!==String(id) && Boolean(destination);
+    if(currentDeckMove) return true;
+    return Boolean(destination);
+  };
+  const buildMoveRequest=(card)=>{
+    if(!data) throw new Error('Container data is still loading.');
     const quantity=1;
-    const destination=locations.find(container=>container.container_id===moveTarget);
-    const toZone=moveTarget===id?(card.zone==='main'?'sideboard':'main'):(destination?.type==='bulk'?'main':moveZone);
-    if(await transfer({from:id,to:moveTarget,printing_id:card.printing_id,finish:card.finish,from_zone:card.zone,to_zone:toZone,quantity}))setNotice(`Moved ${quantity} × ${card.card_name} to ${destination?.name||'container'}${destination?.type==='bulk'?'':` (${toZone==='main'?'main deck':'sideboard'})`}.`);
+    if(data.container.type === 'bulk'){
+      if(!moveTarget||String(moveTarget)===String(id)||!destination){throw new Error('Choose another box as the destination before moving from a bulk box.');}
+      return {from:id,to:destination.container_id,printing_id:card.printing_id,finish:card.finish,from_zone:card.zone,to_zone:'main',quantity};
+    }
+    if(currentDeckMove){
+      const toZone=card.zone==='main'?'sideboard':'main';
+      return {from:id,to:id,printing_id:card.printing_id,finish:card.finish,from_zone:card.zone,to_zone:toZone,quantity};
+    }
+    if(!destination){throw new Error('Choose a valid destination container first.');}
+    const toZone=destination.type==='bulk'?'main':moveZone;
+    return {from:id,to:destination.container_id,printing_id:card.printing_id,finish:card.finish,from_zone:card.zone,to_zone:toZone,quantity};
+  };
+  const moveCard=async card=>{
+    if(!data){setErr('Container data is still loading.');return;}
+    if(!moveEnabled()){
+      setErr(data.container.type === 'bulk' ? 'Choose another container before moving from a bulk box.' : 'Choose a destination container first.');
+      return;
+    }
+    try{
+      const request=buildMoveRequest(card);
+      if(!request.to || !String(request.to).trim())throw new Error('Destination container is missing.');
+      if(request.to===request.from && request.from_zone===request.to_zone)throw new Error('The selected move would not change the card location.');
+      if(await transfer(request)){
+        const destinationName = request.to === request.from ? data.container.name : (locations.find(container=>String(container.container_id)===String(request.to))?.name || 'destination');
+        const destinationZone = request.to === request.from ? (request.to_zone === 'main' ? 'main deck' : 'sideboard') : (request.to_zone === 'main' ? 'main deck' : 'sideboard');
+        setNotice(`Moved ${request.quantity} × ${card.card_name} to ${destinationName}${request.to === request.from ? '' : ` (${destinationZone})`}.`);
+      }
+    }catch(error){
+      setErr(error.message);
+    }
+  };
+
+  useEffect(()=>{
+    if(!scannerOpen)return undefined;
+    let active=true;
+    let scanner=null;
+    let startPromise;
+    let scannerStates;
+    import('html5-qrcode').then(({Html5Qrcode,Html5QrcodeScannerState})=>{
+      if(!active||!scannerOpen||!window.isSecureContext)return;
+      scannerStates=Html5QrcodeScannerState;
+      const targetId=`destination-qr-reader-${id}`;
+      scanner=new Html5Qrcode(targetId);
+      startPromise=scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},async decoded=>{
+        if(destinationScannerProcessingRef.current)return;
+        destinationScannerProcessingRef.current=true;
+        const rawValue=String(decoded||'').trim();
+        const normalizedValue=String(rawValue);
+        if(!normalizedValue||!isValidContainerId(normalizedValue)){
+          setScanMessage('This QR code is not a valid container ID.');
+          destinationScannerProcessingRef.current=false;
+          return;
+        }
+        const matched=locations.find(container=>String(container.container_id)===normalizedValue);
+        if(!matched){
+          setScanMessage('That QR code does not match one of the containers on this page.');
+          destinationScannerProcessingRef.current=false;
+          return;
+        }
+        const selectedId=String(matched.container_id);
+        const sameContainer=selectedId===String(id);
+        setMoveTarget(sameContainer ? '' : selectedId);
+        setMoveZone('sideboard');
+        setScanMessage(sameContainer ? `Selected the current deck for zone movement.` : `Selected destination: ${matched.name}.`);
+        setNotice('');
+        setErr('');
+        try{
+          if(scanner.getState()===scannerStates.SCANNING||scanner.getState()===scannerStates.PAUSED){
+            await scanner.stop();
+          }
+        }finally{
+          setScannerOpen(false);
+          destinationScannerProcessingRef.current=false;
+        }
+      },()=>{}).catch(error=>{
+        if(active){setScanMessage(`Camera unavailable: ${error.message}`);}
+      });
+    }).catch(error=>{
+      if(active){setScanMessage(`Camera unavailable: ${error.message}`);}
+    });
+    return()=>{
+      active=false;
+      if(scanner){
+        void (async()=>{
+          if(startPromise) await startPromise;
+          if(scanner.getState()===scannerStates.SCANNING||scanner.getState()===scannerStates.PAUSED)await scanner.stop();
+          if(scanner.isScanning) await scanner.stop();
+        })().catch(error=>console.error('Failed to stop destination QR scanner:',error));
+      }
+    };
+  },[scannerOpen,id,locations]);
+
+  const openDestinationScanner=()=>{
+    if(!window.isSecureContext){
+      setScanMessage(secureContextWarning);
+      return;
+    }
+    setScanMessage('');
+    setScannerOpen(true);
   };
   if(!data)return <main className="mx-auto max-w-6xl space-y-4 p-6">{err&&<div role="alert" className="flex items-start justify-between gap-4 rounded-lg border border-red-900 bg-red-950/60 p-3 text-sm text-red-200"><span>{err}</span><button aria-label="Dismiss error" onClick={()=>setErr('')} className="text-red-200 hover:text-white">×</button></div>}<div>{err?<button onClick={load} className="rounded-lg bg-slate-800 px-3 py-2">Retry</button>:'Loading…'}</div></main>;
   return <main className="mx-auto max-w-6xl p-4 flex flex-col space-y-6">
@@ -140,8 +248,8 @@ function BoxPage({id}){
       <textarea rows="14" className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 font-mono text-sm" placeholder={'Legend:\n1 Lux, Lady of Luminosity\n\nChampion:\n1 Lux, Crownguard\n\nMainDeck:\n3 Back to Back\n\nBattlefields:\n1 Abandoned Hall\n\nRunes:\n6 Mind Rune\n\nSideboard:'} value={riftatlasText} onChange={e=>{setRiftatlasText(e.target.value);setRiftatlasPreview(null)}}/><div className="flex flex-wrap gap-3"><button disabled={busy||!riftatlasText.trim()} onClick={previewImport} className="rounded-lg bg-slate-700 px-4 py-2 font-medium disabled:opacity-50">Preview list</button>{riftatlasPreview?.ready&&<button disabled={busy} onClick={importDeck} className="rounded-lg bg-indigo-500 px-4 py-2 font-medium disabled:opacity-50">Replace contents and import</button>}</div>{riftatlasPreview&&<div className="space-y-2 rounded-lg border border-slate-700 p-3" aria-live="polite"><div className={riftatlasPreview.ready?'text-emerald-300':'text-amber-300'}>{riftatlasPreview.ready?`Ready: ${riftatlasPreview.cards.length} card definitions matched.`:'Import needs attention.'}</div>{riftatlasPreview.deck_rules&&<div className="text-sm text-slate-300">Main {riftatlasPreview.deck_rules.summary.main}/40 · Runes {riftatlasPreview.deck_rules.summary.runes}/12 · Legends {riftatlasPreview.deck_rules.summary.legends}/1 · Battlefields {riftatlasPreview.deck_rules.summary.battlefields}/3 · Sideboard {riftatlasPreview.deck_rules.summary.sideboard}/10</div>}{riftatlasPreview.deck_rules.warnings.map(message=><div key={message} className="text-sm text-amber-200">{message}</div>)}{riftatlasPreview.missing.length>0&&<div className="text-sm text-amber-200">Not found in catalog: {riftatlasPreview.missing.map(card=>card.card_name).join(', ')}</div>}{riftatlasPreview.errors.map(message=><div key={message} className="text-sm text-red-300">{message}</div>)}{riftatlasPreview.deck_rules.violations.map(message=><div key={message} className="text-sm text-red-300">{message}</div>)}</div>}</section>}
     {data.deck_rules&&<section className="glass order-5 rounded-xl p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Locked deck list</h2><p className="mt-1 text-sm text-slate-400">{data.container.deck_locked_at?`Locked ${new Date(data.container.deck_locked_at).toLocaleString()}. Scanning this QR shows missing cards and their current locations.`:'Lock the current main deck as its expected list. Sideboard cards are not included.'}</p></div><button disabled={busy||data.inventory.filter(card=>card.zone==='main'&&card.current_quantity>0).length===0} onClick={lockDeck} className="rounded-lg bg-indigo-500 px-4 py-2 font-medium disabled:opacity-50">{data.container.deck_locked_at?'Update locked list':'Lock current deck'}</button></div></section>}
     {data.deck_rules&&<section className="glass order-2 rounded-xl p-4"><h2 className="mb-3 font-semibold">Deck limits</h2>{data.deck_rules.warnings.length>0&&<div role="status" className="mb-3 rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-200">Review deck size: {data.deck_rules.warnings.join(' ')}</div>}<div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5"><DeckCount label="Main deck" count={data.deck_rules.summary.main} limit={40}/><DeckCount label="Runes" count={data.deck_rules.summary.runes} limit={12}/><DeckCount label="Legends" count={data.deck_rules.summary.legends} limit={1}/><DeckCount label="Battlefields" count={data.deck_rules.summary.battlefields} limit={3}/><DeckCount label="Sideboard" count={data.deck_rules.summary.sideboard} limit={10}/></div>{data.deck_rules.violations.length>0&&<ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-red-300">{data.deck_rules.violations.map(rule=><li key={rule}>{rule}</li>)}</ul>}</section>}
-    {data.deck_rules&&<section className="glass order-3 rounded-xl p-4"><h2 className="font-semibold">Move cards</h2><p className="mt-1 text-sm text-slate-400">Choose a destination, then use the button beside the card.</p><div className="mt-3 flex flex-wrap items-end gap-3"><label className="min-w-52 flex-1 text-sm text-slate-400">Destination container<select aria-label="Move destination" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" value={moveTarget} onChange={e=>setMoveTarget(e.target.value)}><option value="">Choose destination</option>{locations.map(location=><option key={location.container_id} value={location.container_id}>{location.name} ({location.type})</option>)}</select></label>{moveTarget===id?<p className="text-sm text-slate-400">Within this deck, cards move to the other zone.</p>:locations.find(location=>location.container_id===moveTarget)?.type==='bulk'?<p className="text-sm text-slate-400">Destination zone: Cards</p>:<label className="text-sm text-slate-400">Destination zone<select aria-label="Move destination zone" className="mt-1 block rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" value={moveZone} onChange={e=>setMoveZone(e.target.value)}><option value="main">Main deck</option><option value="sideboard">Sideboard</option></select></label>}</div></section>}
-    {(data.container.type==='bulk'?['main']:['main','sideboard']).map(zone=>{const cards=data.inventory.filter(card=>card.zone===zone&&card.current_quantity>0).sort((a,b)=>{if(zone==='main'){const rank=type=>{const value=String(type||'').toLowerCase();return value.includes('legend')?0:value.includes('rune')?2:value.includes('battlefield')?3:1};const difference=rank(a.type_line)-rank(b.type_line);if(difference)return difference}return a.card_name.localeCompare(b.card_name)});const destination=locations.find(container=>container.container_id===moveTarget);const zoneName=destination?.type==='bulk'?'Cards':moveTarget===id?(zone==='main'?'Sideboard':'Main deck'):moveZone==='main'?'Main deck':'Sideboard';const moveLabel=moveTarget===id?`Move 1 to ${zoneName}`:`Move 1 to ${destination?.name||'destination'} · ${zoneName}`;return <section key={zone} className="order-4"><h2 className="mb-3 font-semibold">{zone==='main'?(data.container.type==='bulk'?'Cards':'Main deck'):'Sideboard'} <span className="text-sm font-normal text-slate-500">({cards.reduce((total,card)=>total+card.current_quantity,0)} cards)</span></h2><div className="space-y-2">{cards.map(x=><div key={`${x.printing_id}-${x.finish}-${x.zone}`} className="glass rounded-xl p-3 flex flex-wrap items-center gap-3"><img src={x.image_url} className="h-20 w-14 object-cover rounded"/><div className="min-w-0 flex-1"><div className="font-medium">{x.card_name}</div><div className="text-xs text-slate-500">{x.printing_id} · {x.finish} · {x.current_quantity} copies</div></div>{data.deck_rules&&<button disabled={busy||!moveTarget} onClick={()=>moveCard(x)} className="rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium disabled:opacity-50">{moveLabel}</button>}<div className="flex gap-2"><button disabled={busy} onClick={()=>changeQuantity(x,x.current_quantity-1)} className="rounded-lg bg-slate-800 px-3 py-2 text-sm disabled:opacity-50">Remove 1</button><button disabled={busy} onClick={()=>removeCard(x)} className="rounded-lg border border-red-900 px-3 py-2 text-sm text-red-200 hover:bg-red-950/60 disabled:opacity-50">Remove all</button></div></div>)}{!cards.length&&<div className="text-slate-500">No cards in this {data.container.type==='bulk'?'container':zone==='main'?'deck':'sideboard'}.</div>}</div></section>})}
+    {canMoveCards&&<section className="glass order-3 rounded-xl p-4"><h2 className="font-semibold">Move cards</h2><p className="mt-1 text-sm text-slate-400">Choose a destination, then use the button beside the card.</p><div className="mt-3 flex flex-wrap items-end gap-3"><label className="min-w-52 flex-1 text-sm text-slate-400">Destination container<select aria-label="Move destination" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" value={moveTarget} onChange={e=>{const next=e.target.value;setMoveTarget(next);if(!next)setMoveZone('sideboard');}}><option value="">{data.container.type==='bulk'?'This box (choose another box)':'This deck (Sideboard default)'}</option>{locations.filter(location=>String(location.container_id)!==String(id)).map(location=><option key={location.container_id} value={location.container_id}>{location.name} ({location.type})</option>)}</select></label><button type="button" aria-label="Scan destination box QR" title="Scan destination box QR" onClick={openDestinationScanner} className="flex h-10 w-10 items-center justify-center rounded-lg border border-indigo-400 bg-indigo-600 text-white hover:bg-indigo-500"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>{data.container.type==='bulk'&&destination?<p className="text-sm text-slate-400">Destination zone: Cards</p>:data.container.type!=='bulk'&&(moveTarget===''||String(moveTarget)===String(id))?null:destination?.type==='bulk'?<p className="text-sm text-slate-400">Destination zone: Cards</p>:data.container.type!=='bulk'&&<label className="text-sm text-slate-400">Destination zone<select aria-label="Move destination zone" className="mt-1 block rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" value={moveZone} onChange={e=>setMoveZone(e.target.value)}><option value="main">Main deck</option><option value="sideboard">Sideboard</option></select></label>}</div>{scannerOpen&&<div className="mt-4 rounded-xl border border-slate-700 bg-slate-950 p-3" role="region" aria-label="Destination box QR scanner"><div className="mb-2 flex items-center justify-between gap-3"><strong className="text-sm">Scan destination box QR</strong><button type="button" onClick={()=>{setScannerOpen(false);setScanMessage('');}} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300">Cancel scan</button></div><div id={`destination-qr-reader-${id}`} className="overflow-hidden rounded-xl bg-black min-h-64" aria-label="Camera view for destination QR code" /><p className="mt-2 text-sm text-slate-300" role="status" aria-live="polite">{scanMessage||'Waiting for QR code…'}</p></div>}{scanMessage&&!scannerOpen&&<p className="mt-3 text-sm text-slate-300" role="status" aria-live="polite">{scanMessage}</p>}</section>}
+    {(data.container.type==='bulk'?['main']:['main','sideboard']).map(zone=>{const cards=data.inventory.filter(card=>card.zone===zone&&card.current_quantity>0).sort((a,b)=>{if(zone==='main'){const rank=type=>{const value=String(type||'').toLowerCase();return value.includes('legend')?0:value.includes('rune')?2:value.includes('battlefield')?3:1};const difference=rank(a.type_line)-rank(b.type_line);if(difference)return difference}return a.card_name.localeCompare(b.card_name)});const zoneName=data.container.type==='bulk'?'Cards':(moveTarget===''||String(moveTarget)===String(id))?(zone==='main'?'Sideboard':'Main deck'):destination?.type==='bulk'?'Cards':moveZone==='main'?'Main deck':'Sideboard';const moveLabel=(moveTarget===''||String(moveTarget)===String(id))?`Move 1 to ${zoneName}`:`Move 1 to ${destination?.name||'destination'} · ${zoneName}`;return <section key={zone} className="order-4"><h2 className="mb-3 font-semibold">{zone==='main'?(data.container.type==='bulk'?'Cards':'Main deck'):'Sideboard'} <span className="text-sm font-normal text-slate-500">({cards.reduce((total,card)=>total+card.current_quantity,0)} cards)</span></h2><div className="space-y-2">{cards.map(x=><div key={`${x.printing_id}-${x.finish}-${x.zone}`} className="glass rounded-xl p-3 flex flex-wrap items-center gap-3"><img src={x.image_url} className="h-20 w-14 object-cover rounded"/><div className="min-w-0 flex-1"><div className="font-medium">{x.card_name}</div><div className="text-xs text-slate-500">{x.printing_id} · {x.finish} · {x.current_quantity} copies</div></div>{canMoveCards&&<button disabled={busy||!moveEnabled()} onClick={()=>moveCard(x)} className="rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium disabled:opacity-50">{moveLabel}</button>}<div className="flex gap-2"><button disabled={busy} onClick={()=>changeQuantity(x,x.current_quantity-1)} className="rounded-lg bg-slate-800 px-3 py-2 text-sm disabled:opacity-50">Remove 1</button><button disabled={busy} onClick={()=>removeCard(x)} className="rounded-lg border border-red-900 px-3 py-2 text-sm text-red-200 hover:bg-red-950/60 disabled:opacity-50">Remove all</button></div></div>)}{!cards.length&&<div className="text-slate-500">No cards in this {data.container.type==='bulk'?'container':zone==='main'?'deck':'sideboard'}.</div>}</div></section>})}
     {data.container.deck_locked_at&&<section className="order-1 space-y-3"><div><h2 className="font-semibold">Missing from locked list</h2><p className="text-sm text-slate-400">Available copies elsewhere are listed below. Move them here to restore the deck.</p></div>{data.shortfalls?.length>0?data.shortfalls.map(item=><div key={item.definition_key} className="glass rounded-xl p-4"><div className="flex items-start justify-between gap-3"><div><div className="font-medium">{item.card_name}</div><div className="text-sm text-amber-300">Missing {item.shortfall} of {item.required_quantity}</div></div></div>{item.sources.length>0?<div className="mt-3 space-y-2">{item.sources.map(source=>{const quantity=Math.min(source.quantity,item.shortfall);return <div key={`${source.container_id}-${source.printing_id}-${source.finish}-${source.zone}`} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-800 p-2"><div className="min-w-0 flex-1 text-sm"><span className="font-medium">{source.container_name}</span><span className="text-slate-500"> · {source.quantity} available · {source.finish}{source.zone==='sideboard'?' · sideboard':''} · {source.set_code} #{source.collector_num}</span></div><button disabled={busy} onClick={()=>restoreSource(source,item)} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium disabled:opacity-50">Move {quantity} to deck</button></div>})}</div>:<p className="mt-3 text-sm text-slate-500">No matching copies are currently stored in another container.</p>}</div>):<div className="rounded-lg border border-emerald-900 bg-emerald-950/40 p-3 text-sm text-emerald-200">The locked main deck is complete.</div>}</section>}
   </main>;
 }
