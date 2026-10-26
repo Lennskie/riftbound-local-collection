@@ -49,3 +49,5 @@ The Express server serves the built frontend when `dist/` exists.
 ## Fan-project notice
 
 Riftbound, its cards, names, artwork, and related intellectual property belong to their respective owners. This is an unofficial fan project. Rifthunt is an external catalog dependency; its availability and API shape are outside this project's control.
+
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/lennskie/riftbound-local-collection?utm_source=readme&utm_medium=badge)
